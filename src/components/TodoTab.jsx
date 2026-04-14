@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 
+const toDateKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+
 export default function TodoTab() {
   const [todos, setTodos] = useState(() => {
     const saved = localStorage.getItem('todos')
@@ -33,9 +35,9 @@ export default function TodoTab() {
   }
 
   const now = new Date()
-  const todayKey = now.toISOString().slice(0, 10)
-  const tomorrowKey = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString().slice(0, 10)
-  const weekEndKey = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7).toISOString().slice(0, 10)
+  const todayKey = toDateKey(now)
+  const tomorrowKey = toDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))
+  const weekEndKey = toDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7))
 
   const byDate = (a, b) => (a.when || '9999').localeCompare(b.when || '9999')
 
@@ -133,7 +135,7 @@ export default function TodoTab() {
 function TodoItem({ todo, onToggle, onDelete, onUpdate }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState({ name: todo.name, emoji: todo.emoji, when: todo.when, deadline: todo.deadline })
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toDateKey(new Date())
   const isOverdue = todo.deadline && !todo.done && todo.deadline < today
 
   const saveEdit = () => {
