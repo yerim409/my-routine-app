@@ -79,7 +79,7 @@ async function migrateLocalStorageToSupabase(userId) {
       const { error } = await supabase.from('todos').upsert(
         todos.map(t => ({
           id: t.id, user_id: userId, name: t.name, emoji: t.emoji || '📌',
-          done: t.done || false, done_at: t.done ? today : null,
+          done: t.done || false, done_at: null,
           when: t.when || null, deadline: t.deadline || null,
         }))
       )
