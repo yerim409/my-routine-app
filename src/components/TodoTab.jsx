@@ -1,74 +1,291 @@
 import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
+import TodoArchive from './TodoArchive'
 
-const toDateKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+const TAG_COLORS = [
+  { bg: 'bg-sky-100', text: 'text-sky-600' },
+  { bg: 'bg-violet-100', text: 'text-violet-600' },
+  { bg: 'bg-rose-100', text: 'text-rose-600' },
+  { bg: 'bg-amber-100', text: 'text-amber-600' },
+  { bg: 'bg-emerald-100', text: 'text-emerald-600' },
+  { bg: 'bg-orange-100', text: 'text-orange-600' },
+  { bg: 'bg-pink-100', text: 'text-pink-600' },
+  { bg: 'bg-blue-100', text: 'text-blue-600' },
+]
 
-export default function TodoTab() {
-  const [todos, setTodos] = useState(() => {
-    const saved = localStorage.getItem('todos')
-    return saved ? JSON.parse(saved) : []
-  })
+function toDateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
+function getTodayKey() {
+  return toDateKey(new Date())
+}
+
+function TagChip({ tag, selected, onClick, onDelete }) {
+  const color = TAG_COLORS[tag.color_index % TAG_COLORS.length]
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all
+        ${selected ? `${color.bg} ${color.text} ring-2 ring-offset-1 ring-current` : `${color.bg} ${color.text} opacity-70`}`}
+    >
+      {tag.name}
+      {onDelete && (
+        <span onClick={e => { e.stopPropagation(); onDelete(tag.id) }} className="ml-0.5 opacity-60 hover:opacity-100">×</span>
+      )}
+    </button>
+  )
+}
+
+function TagSelector({ tags, selectedIds, onToggle, onCreateTag }) {
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
+
+  const handleCreate = () => {
+    if (!newName.trim()) return
+    onCreateTag(newName.trim())
+    setNewName('')
+    setAdding(false)
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-gray-400 mb-2 px-1">태그</p>
+      <div className="flex flex-wrap gap-1.5">
+        {tags.map(tag => (
+          <TagChip
+            key={tag.id}
+            tag={tag}
+            selected={selectedIds.includes(tag.id)}
+            onClick={() => onToggle(tag.id)}
+          />
+        ))}
+        {adding ? (
+          <div className="flex items-center gap-1">
+            <input
+              autoFocus
+              type="text"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setAdding(false) }}
+              placeholder="태그명"
+              className="w-20 bg-gray-50 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            />
+            <button onClick={handleCreate} className="text-xs text-emerald-500 font-medium">추가</button>
+            <button onClick={() => setAdding(false)} className="text-xs text-gray-400">취소</button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setAdding(true)}
+            className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-400 hover:bg-gray-200 transition-all"
+          >
+            + 새 태그
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function TodoTab({ userId }) {
+  const [todos, setTodos] = useState([])
+  const [tags, setTags] = useState([])
+  const [filterTag, setFilterTag] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
-  const [newTodo, setNewTodo] = useState({ name: '', deadline: '', when: '', emoji: '📌' })
+  const [newTodo, setNewTodo] = useState({ name: '', deadline: '', when: '', emoji: '📌', tag_ids: [] })
+  const [loading, setLoading] = useState(true)
 
+  // Load todos, tags, and tag links
   useEffect(() => {
-    localStorage.setItem('todos', JSON.stringify(todos))
-  }, [todos])
+    if (!userId) return
+    let cancelled = false
 
-  const addTodo = () => {
+    async function load() {
+      setLoading(true)
+      const [{ data: todosData }, { data: tagsData }, { data: linksData }] = await Promise.all([
+        supabase.from('todos').select('*').eq('user_id', userId).order('created_at'),
+        supabase.from('todo_tags').select('*').eq('user_id', userId),
+        supabase.from('todo_tag_links').select('todo_id, tag_id').eq('user_id', userId),
+      ])
+      if (cancelled) return
+
+      // Attach tag_ids to each todo
+      const linkMap = {}
+      for (const { todo_id, tag_id } of (linksData || [])) {
+        if (!linkMap[todo_id]) linkMap[todo_id] = []
+        linkMap[todo_id].push(tag_id)
+      }
+      const todosWithTags = (todosData || []).map(t => ({ ...t, tag_ids: linkMap[t.id] || [] }))
+
+      setTodos(todosWithTags)
+      setTags(tagsData || [])
+      setLoading(false)
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [userId])
+
+  const createTag = async (name) => {
+    const id = Date.now()
+    const tag = { id, user_id: userId, name, color_index: tags.length }
+    setTags(prev => [...prev, tag])
+    const { error } = await supabase.from('todo_tags').insert(tag)
+    if (error) console.error('createTag error:', error)
+    return id
+  }
+
+  const deleteTag = async (tagId) => {
+    setTags(prev => prev.filter(t => t.id !== tagId))
+    setTodos(prev => prev.map(t => ({ ...t, tag_ids: (t.tag_ids || []).filter(id => id !== tagId) })))
+    if (filterTag === tagId) setFilterTag(null)
+    const { error } = await supabase.from('todo_tags').delete().eq('id', tagId).eq('user_id', userId)
+    if (error) console.error('deleteTag error:', error)
+  }
+
+  const addTodo = async () => {
     if (!newTodo.name.trim()) return
-    setTodos([...todos, { ...newTodo, id: Date.now(), done: false }])
-    setNewTodo({ name: '', deadline: '', when: '', emoji: '📌' })
+    const id = Date.now()
+    const todo = {
+      id, user_id: userId, name: newTodo.name.trim(), emoji: newTodo.emoji || '📌',
+      done: false, done_at: null, when: newTodo.when || null, deadline: newTodo.deadline || null,
+      tag_ids: newTodo.tag_ids,
+    }
+    setTodos(prev => [...prev, todo])
+    setNewTodo({ name: '', deadline: '', when: '', emoji: '📌', tag_ids: [] })
     setShowAdd(false)
+
+    const { error } = await supabase.from('todos').insert({
+      id: todo.id, user_id: userId, name: todo.name, emoji: todo.emoji,
+      done: false, done_at: null, when: todo.when, deadline: todo.deadline,
+    })
+    if (error) { console.error('addTodo error:', error); return }
+
+    if (todo.tag_ids.length > 0) {
+      const links = todo.tag_ids.map(tagId => ({ todo_id: id, tag_id: tagId, user_id: userId }))
+      const { error: le } = await supabase.from('todo_tag_links').insert(links)
+      if (le) console.error('addTodo tag links error:', le)
+    }
   }
 
-  const toggleDone = (id) => {
-    setTodos(todos.map(t => t.id === id ? { ...t, done: !t.done } : t))
+  const toggleDone = async (id) => {
+    const todo = todos.find(t => t.id === id)
+    const newDone = !todo.done
+    const newDoneAt = newDone ? getTodayKey() : null
+
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, done: newDone, done_at: newDoneAt } : t))
+
+    const { error } = await supabase.from('todos')
+      .update({ done: newDone, done_at: newDoneAt })
+      .eq('id', id).eq('user_id', userId)
+    if (error) console.error('toggleDone error:', error)
   }
 
-  const updateTodo = (id, changes) => {
-    setTodos(todos.map(t => t.id === id ? { ...t, ...changes } : t))
+  const updateTodo = async (id, changes) => {
+    const { tag_ids, ...dbChanges } = changes
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, ...changes } : t))
+
+    if (Object.keys(dbChanges).length > 0) {
+      const { error } = await supabase.from('todos').update(dbChanges).eq('id', id).eq('user_id', userId)
+      if (error) console.error('updateTodo error:', error)
+    }
+
+    if (tag_ids !== undefined) {
+      // Replace all tag links for this todo
+      await supabase.from('todo_tag_links').delete().eq('todo_id', id).eq('user_id', userId)
+      if (tag_ids.length > 0) {
+        const links = tag_ids.map(tagId => ({ todo_id: id, tag_id: tagId, user_id: userId }))
+        const { error } = await supabase.from('todo_tag_links').insert(links)
+        if (error) console.error('updateTodo tag links error:', error)
+      }
+    }
   }
 
-  const deleteTodo = (id) => {
-    setTodos(todos.filter(t => t.id !== id))
+  const deleteTodo = async (id) => {
+    setTodos(prev => prev.filter(t => t.id !== id))
+    const { error } = await supabase.from('todos').delete().eq('id', id).eq('user_id', userId)
+    if (error) console.error('deleteTodo error:', error)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
   }
 
   const now = new Date()
   const todayKey = toDateKey(now)
   const tomorrowKey = toDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))
   const weekEndKey = toDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7))
-
   const byDate = (a, b) => (a.when || '9999').localeCompare(b.when || '9999')
 
-  const remaining = todos.filter(t => !t.done).sort(byDate)
-  const todayTodos = remaining.filter(t => t.when === todayKey)
-  const tomorrowTodos = remaining.filter(t => t.when === tomorrowKey)
-  const weekTodos = remaining.filter(t => t.when > tomorrowKey && t.when <= weekEndKey)
-  const laterTodos = remaining.filter(t => !t.when || t.when > weekEndKey)
-  const done = todos.filter(t => t.done).sort(byDate)
+  // Only show pending todos in main list
+  const pending = todos.filter(t => !t.done)
+  const done = todos.filter(t => t.done)
+
+  const filtered = filterTag ? pending.filter(t => (t.tag_ids || []).includes(filterTag)) : pending
+  const pastTodos = filtered.filter(t => t.when && t.when < todayKey).sort(byDate)
+  const todayTodos = filtered.filter(t => t.when === todayKey).sort(byDate)
+  const tomorrowTodos = filtered.filter(t => t.when === tomorrowKey).sort(byDate)
+  const weekTodos = filtered.filter(t => t.when > tomorrowKey && t.when <= weekEndKey).sort(byDate)
+  const laterTodos = filtered.filter(t => !t.when || t.when > weekEndKey).sort(byDate)
 
   return (
     <div className="pt-4 pb-8">
-      {todos.length === 0 && !showAdd && (
+      {/* 태그 필터 바 */}
+      {tags.length > 0 && (
+        <div className="px-4 mb-4 flex gap-2 flex-wrap">
+          <button
+            onClick={() => setFilterTag(null)}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+              filterTag === null ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-400'
+            }`}
+          >
+            전체
+          </button>
+          {tags.map(tag => (
+            <TagChip
+              key={tag.id}
+              tag={tag}
+              selected={filterTag === tag.id}
+              onClick={() => setFilterTag(filterTag === tag.id ? null : tag.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {filtered.length === 0 && !showAdd && done.length === 0 && (
         <div className="text-center py-16 text-gray-300">
           <p className="text-5xl mb-4">✅</p>
-          <p className="text-sm font-medium">할 일을 추가해봐요!</p>
+          <p className="text-sm font-medium">
+            {filterTag ? '이 태그의 할 일이 없어요!' : '할 일을 추가해봐요!'}
+          </p>
         </div>
       )}
 
       {[
+        { label: '지난', items: pastTodos, color: 'text-red-400' },
         { label: '오늘', items: todayTodos, color: 'text-emerald-400' },
         { label: '내일', items: tomorrowTodos, color: 'text-blue-400' },
         { label: '이번 주', items: weekTodos, color: 'text-violet-400' },
         { label: '나중에', items: laterTodos, color: 'text-gray-400' },
-        { label: '완료', items: done, color: 'text-gray-300' },
       ].map(({ label, items, color }) => items.length > 0 && (
         <div key={label} className="px-4 mb-5">
           <p className={`text-xs font-semibold mb-2 px-1 ${color}`}>{label} {items.length}</p>
           <div className="space-y-2">
             {items.map(todo => (
-              <TodoItem key={todo.id} todo={todo} onToggle={toggleDone} onDelete={deleteTodo} onUpdate={updateTodo} />
+              <TodoItem
+                key={todo.id}
+                todo={todo}
+                tags={tags}
+                onToggle={toggleDone}
+                onDelete={deleteTodo}
+                onUpdate={updateTodo}
+                onCreateTag={createTag}
+                onDeleteTag={deleteTag}
+              />
             ))}
           </div>
         </div>
@@ -94,25 +311,39 @@ export default function TodoTab() {
                 className="w-14 bg-gray-50 rounded-xl px-2 py-2.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-300"
               />
             </div>
-            <div className="space-y-2 mb-3">
-              <div>
-                <p className="text-xs text-gray-400 mb-1 px-1">할 날짜</p>
-                <input
-                  type="date"
-                  value={newTodo.when}
-                  onChange={e => setNewTodo({ ...newTodo, when: e.target.value })}
-                  className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                />
+            <div className="space-y-3 mb-3">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <p className="text-xs text-gray-400 mb-1 px-1">할 날짜</p>
+                  <input
+                    type="date"
+                    value={newTodo.when}
+                    onChange={e => setNewTodo({ ...newTodo, when: e.target.value })}
+                    className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-400 mb-1 px-1">기한</p>
+                  <input
+                    type="date"
+                    value={newTodo.deadline}
+                    onChange={e => setNewTodo({ ...newTodo, deadline: e.target.value })}
+                    className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  />
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-400 mb-1 px-1">기한</p>
-                <input
-                  type="date"
-                  value={newTodo.deadline}
-                  onChange={e => setNewTodo({ ...newTodo, deadline: e.target.value })}
-                  className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                />
-              </div>
+              <TagSelector
+                tags={tags}
+                selectedIds={newTodo.tag_ids}
+                onToggle={id => setNewTodo(prev => ({
+                  ...prev,
+                  tag_ids: prev.tag_ids.includes(id) ? prev.tag_ids.filter(t => t !== id) : [...prev.tag_ids, id]
+                }))}
+                onCreateTag={async (name) => {
+                  const id = await createTag(name)
+                  setNewTodo(prev => ({ ...prev, tag_ids: [...prev.tag_ids, id] }))
+                }}
+              />
             </div>
             <div className="flex gap-2">
               <button onClick={() => setShowAdd(false)} className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 bg-gray-50">취소</button>
@@ -128,20 +359,33 @@ export default function TodoTab() {
           </button>
         )}
       </div>
+
+      {/* 완료 아카이브 */}
+      <TodoArchive doneTodos={done} tags={tags} />
     </div>
   )
 }
 
-function TodoItem({ todo, onToggle, onDelete, onUpdate }) {
+function TodoItem({ todo, tags, onToggle, onDelete, onUpdate, onCreateTag, onDeleteTag }) {
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState({ name: todo.name, emoji: todo.emoji, when: todo.when, deadline: todo.deadline })
-  const today = toDateKey(new Date())
+  const [draft, setDraft] = useState({
+    name: todo.name, emoji: todo.emoji,
+    when: todo.when || '', deadline: todo.deadline || '',
+    tag_ids: todo.tag_ids || []
+  })
+  const today = getTodayKey()
   const isOverdue = todo.deadline && !todo.done && todo.deadline < today
 
   const saveEdit = () => {
-    if (draft.name.trim()) onUpdate(todo.id, draft)
+    if (draft.name.trim()) onUpdate(todo.id, {
+      name: draft.name.trim(), emoji: draft.emoji,
+      when: draft.when || null, deadline: draft.deadline || null,
+      tag_ids: draft.tag_ids,
+    })
     setEditing(false)
   }
+
+  const todoTags = tags.filter(t => (todo.tag_ids || []).includes(t.id))
 
   if (editing) {
     return (
@@ -161,25 +405,39 @@ function TodoItem({ todo, onToggle, onDelete, onUpdate }) {
             className="w-14 bg-gray-50 rounded-xl px-2 py-2.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-300"
           />
         </div>
-        <div className="space-y-2 mb-3">
-          <div>
-            <p className="text-xs text-gray-400 mb-1 px-1">할 날짜</p>
-            <input
-              type="date"
-              value={draft.when}
-              onChange={e => setDraft({ ...draft, when: e.target.value })}
-              className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-            />
+        <div className="space-y-3 mb-3">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <p className="text-xs text-gray-400 mb-1 px-1">할 날짜</p>
+              <input
+                type="date"
+                value={draft.when}
+                onChange={e => setDraft({ ...draft, when: e.target.value })}
+                className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs text-gray-400 mb-1 px-1">기한</p>
+              <input
+                type="date"
+                value={draft.deadline}
+                onChange={e => setDraft({ ...draft, deadline: e.target.value })}
+                className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              />
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-gray-400 mb-1 px-1">기한</p>
-            <input
-              type="date"
-              value={draft.deadline}
-              onChange={e => setDraft({ ...draft, deadline: e.target.value })}
-              className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-            />
-          </div>
+          <TagSelector
+            tags={tags}
+            selectedIds={draft.tag_ids}
+            onToggle={id => setDraft(prev => ({
+              ...prev,
+              tag_ids: prev.tag_ids.includes(id) ? prev.tag_ids.filter(t => t !== id) : [...prev.tag_ids, id]
+            }))}
+            onCreateTag={async (name) => {
+              const id = await onCreateTag(name)
+              setDraft(prev => ({ ...prev, tag_ids: [...prev.tag_ids, id] }))
+            }}
+          />
         </div>
         <div className="flex gap-2">
           <button onClick={() => setEditing(false)} className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 bg-gray-50">취소</button>
@@ -190,31 +448,27 @@ function TodoItem({ todo, onToggle, onDelete, onUpdate }) {
   }
 
   return (
-    <div className={`bg-white rounded-2xl px-4 py-3.5 shadow-sm border border-gray-50 flex items-center gap-3 ${todo.done ? 'opacity-50' : ''}`}>
+    <div className="bg-white rounded-2xl px-4 py-3.5 shadow-sm border border-gray-50 flex items-center gap-3">
       <button
         onClick={() => onToggle(todo.id)}
-        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${todo.done ? 'bg-emerald-400 border-emerald-400' : 'border-gray-200'}`}
+        className="w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all border-gray-200"
       >
-        {todo.done && (
-          <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
-        )}
       </button>
 
       <span className="text-lg">{todo.emoji}</span>
 
-      <div className="flex-1 min-w-0" onClick={() => !todo.done && setEditing(true)}>
-        <p className={`text-sm font-medium text-gray-800 ${todo.done ? 'line-through text-gray-400' : ''}`}>
-          {todo.name}
-        </p>
-        <div className="flex gap-2 mt-0.5 flex-wrap">
+      <div className="flex-1 min-w-0" onClick={() => setEditing(true)}>
+        <p className="text-sm font-medium text-gray-800">{todo.name}</p>
+        <div className="flex gap-2 mt-0.5 flex-wrap items-center">
           {todo.when && <span className="text-xs text-blue-400">📅 {todo.when}</span>}
           {todo.deadline && (
             <span className={`text-xs ${isOverdue ? 'text-red-400 font-medium' : 'text-gray-400'}`}>
               {isOverdue ? '⚠️ ' : '⏰ '}{todo.deadline}
             </span>
           )}
+          {todoTags.map(tag => (
+            <TagChip key={tag.id} tag={tag} selected={false} onClick={() => {}} />
+          ))}
         </div>
       </div>
 

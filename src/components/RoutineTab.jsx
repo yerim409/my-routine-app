@@ -14,27 +14,50 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { supabase } from '../lib/supabase'
 import RoutineCalendar from './RoutineCalendar'
 
-const DEFAULT_ROUTINES = [
-  { id: 1, name: '영양제', emoji: '💊' },
-  { id: 2, name: '일본어 공부', emoji: '🇯🇵' },
-  { id: 3, name: '뉴스레터', emoji: '📰' },
-  { id: 4, name: '국시 공부', emoji: '📖' },
-  { id: 5, name: '운동', emoji: '🏃' },
-  { id: 6, name: '일기', emoji: '✏️' },
-  { id: 9, name: '영어 회화', emoji: '🗣️' },
-  { id: 7, name: '독서', emoji: '📚' },
-  { id: 8, name: '가계부', emoji: '💰' },
-]
-
-function getTodayKey() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+function getDateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
+function getTodayKey() {
+  return getDateKey(new Date())
+}
 
-function SortableRoutineItem({ routine, checks, streaks, editMode, onToggle, onDelete, onSelect, onUpdate }) {
+function getPrevDateKey(dateKey) {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  date.setDate(date.getDate() - 1)
+  return getDateKey(date)
+}
+
+function calculateStreak(routineId, allChecks, dateKey) {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  const startDate = new Date(y, m - 1, d)
+  let streak = 0
+  let lastCheckedDate = null
+
+  for (let i = 0; i < 365; i++) {
+    const cur = new Date(startDate)
+    cur.setDate(startDate.getDate() - i)
+    const ds = getDateKey(cur)
+    const dayChecks = allChecks[ds] || {}
+
+    if (dayChecks[routineId]) {
+      if (!lastCheckedDate) lastCheckedDate = ds
+      streak++
+    } else if (i === 0) {
+      continue
+    } else {
+      break
+    }
+  }
+
+  return { streak, lastCheckedDate }
+}
+
+function SortableRoutineItem({ routine, checks, allChecks, dateKey, editMode, onToggle, onDelete, onSelect, onUpdate }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: routine.id })
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(routine.name)
@@ -57,6 +80,10 @@ function SortableRoutineItem({ routine, checks, streaks, editMode, onToggle, onD
   useEffect(() => {
     if (editing && inputRef.current) inputRef.current.focus()
   }, [editing])
+
+  const { streak, lastCheckedDate } = calculateStreak(routine.id, allChecks, dateKey)
+  const prevDateKey = getPrevDateKey(dateKey)
+  const isStreakActive = streak > 0 && (lastCheckedDate === dateKey || lastCheckedDate === prevDateKey)
 
   return (
     <div ref={setNodeRef} style={style} className={`bg-white rounded-2xl px-4 py-3.5 shadow-sm border border-gray-50 flex items-center gap-3 ${checks[routine.id] && !editMode ? 'opacity-50' : ''}`}>
@@ -112,9 +139,9 @@ function SortableRoutineItem({ routine, checks, streaks, editMode, onToggle, onD
 
           {!editMode && (
             <div className="flex items-center gap-0.5 flex-shrink-0">
-              <span className={streaks[routine.id] > 0 ? 'text-base' : 'text-base opacity-20'}>🔥</span>
-              <span className={`text-xs font-semibold ${streaks[routine.id] > 0 ? 'text-orange-400' : 'text-gray-300'}`}>
-                {streaks[routine.id] || 0}
+              <span className={isStreakActive ? 'text-base' : 'text-base opacity-30'}>🔥</span>
+              <span className={`text-xs font-semibold ${isStreakActive ? 'text-orange-400' : 'text-gray-300'}`}>
+                {streak}
               </span>
             </div>
           )}
@@ -132,38 +159,13 @@ function SortableRoutineItem({ routine, checks, streaks, editMode, onToggle, onD
   )
 }
 
-export default function RoutineTab({ selectedDate }) {
+export default function RoutineTab({ selectedDate, userId }) {
   const dateKey = selectedDate || getTodayKey()
 
-  const [routines, setRoutines] = useState(() => {
-    const version = localStorage.getItem('routines_version')
-    if (version !== '6') {
-      localStorage.removeItem('routines')
-      localStorage.removeItem('streaks')
-      // streak_date 키들 초기화
-      Object.keys(localStorage).filter(k => k.startsWith('streak_date_')).forEach(k => localStorage.removeItem(k))
-      localStorage.setItem('routines_version', '6')
-    }
-    const saved = localStorage.getItem('routines')
-    const parsed = saved ? JSON.parse(saved) : []
-    return parsed.length > 0 ? parsed : DEFAULT_ROUTINES
-  })
-
-  const [checks, setChecks] = useState(() => {
-    const saved = localStorage.getItem(`checks_${dateKey}`)
-    return saved ? JSON.parse(saved) : {}
-  })
-
-  useEffect(() => {
-    const saved = localStorage.getItem(`checks_${dateKey}`)
-    setChecks(saved ? JSON.parse(saved) : {})
-  }, [dateKey])
-
-  const [streaks, setStreaks] = useState(() => {
-    const saved = localStorage.getItem('streaks')
-    return saved ? JSON.parse(saved) : {}
-  })
-
+  const [routines, setRoutines] = useState([])
+  const [checks, setChecks] = useState({})
+  const [allChecks, setAllChecks] = useState({})
+  const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [newRoutine, setNewRoutine] = useState({ name: '', emoji: '✨' })
   const [selectedRoutine, setSelectedRoutine] = useState(null)
@@ -174,52 +176,125 @@ export default function RoutineTab({ selectedDate }) {
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   )
 
-  useEffect(() => { localStorage.setItem('routines', JSON.stringify(routines)) }, [routines])
-  useEffect(() => { localStorage.setItem(`checks_${dateKey}`, JSON.stringify(checks)) }, [checks])
+  // Initial data load
+  useEffect(() => {
+    if (!userId) return
+    let cancelled = false
 
-  const toggleCheck = (id) => {
+    async function load() {
+      setLoading(true)
+
+      const [{ data: routinesData }, { data: checksData }] = await Promise.all([
+        supabase.from('routines').select('*').eq('user_id', userId).order('sort_order'),
+        supabase.from('routine_checks').select('routine_id, date').eq('user_id', userId),
+      ])
+
+      if (cancelled) return
+
+      setRoutines(routinesData || [])
+
+      // Build allChecks map: { [date]: { [routineId]: true } }
+      const map = {}
+      for (const { routine_id, date } of (checksData || [])) {
+        if (!map[date]) map[date] = {}
+        map[date][routine_id] = true
+      }
+      setAllChecks(map)
+      setChecks(map[dateKey] || {})
+      setLoading(false)
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [userId])
+
+  // Update checks when dateKey changes
+  useEffect(() => {
+    setChecks(allChecks[dateKey] || {})
+  }, [dateKey, allChecks])
+
+  const toggleCheck = async (id) => {
     const isChecking = !checks[id]
-    setChecks(prev => ({ ...prev, [id]: isChecking }))
 
-    // 오늘 날짜에서 처음 체크할 때만 스트릭 증가
-    const streakDateKey = `streak_date_${id}`
-    const lastStreakDate = localStorage.getItem(streakDateKey)
-    if (isChecking && lastStreakDate !== dateKey) {
-      localStorage.setItem(streakDateKey, dateKey)
-      setStreaks(prev => {
-        const updated = { ...prev, [id]: (prev[id] || 0) + 1 }
-        localStorage.setItem('streaks', JSON.stringify(updated))
-        return updated
-      })
+    // Optimistic update
+    const newDayChecks = { ...checks, [id]: isChecking }
+    if (!isChecking) delete newDayChecks[id]
+    setChecks(newDayChecks)
+    setAllChecks(prev => ({ ...prev, [dateKey]: newDayChecks }))
+
+    // Persist to Supabase
+    if (isChecking) {
+      const { error } = await supabase.from('routine_checks').upsert({ user_id: userId, routine_id: id, date: dateKey })
+      if (error) console.error('toggleCheck insert error:', error)
+    } else {
+      const { error } = await supabase.from('routine_checks')
+        .delete()
+        .eq('user_id', userId)
+        .eq('routine_id', id)
+        .eq('date', dateKey)
+      if (error) console.error('toggleCheck delete error:', error)
     }
   }
 
-  const updateRoutine = (id, changes) => {
-    setRoutines(prev => prev.map(r => r.id === id ? { ...r, ...changes } : r))
-  }
-
-  const addRoutine = () => {
+  const addRoutine = async () => {
     if (!newRoutine.name.trim()) return
-    setRoutines(prev => [...prev, { ...newRoutine, id: Date.now() }])
+    const id = Date.now()
+    const routine = { id, user_id: userId, name: newRoutine.name.trim(), emoji: newRoutine.emoji, sort_order: routines.length }
+
+    setRoutines(prev => [...prev, routine])
     setNewRoutine({ name: '', emoji: '✨' })
     setShowAdd(false)
+
+    const { error } = await supabase.from('routines').insert(routine)
+    if (error) console.error('addRoutine error:', error)
   }
 
-  const deleteRoutine = (id) => setRoutines(prev => prev.filter(r => r.id !== id))
+  const deleteRoutine = async (id) => {
+    setRoutines(prev => prev.filter(r => r.id !== id))
+    const { error } = await supabase.from('routines').delete().eq('id', id).eq('user_id', userId)
+    if (error) console.error('deleteRoutine error:', error)
+  }
 
-  const handleDragEnd = ({ active, over }) => {
-    if (active.id !== over?.id) {
-      setRoutines(prev => arrayMove(prev, prev.findIndex(r => r.id === active.id), prev.findIndex(r => r.id === over.id)))
-    }
+  const updateRoutine = async (id, changes) => {
+    setRoutines(prev => prev.map(r => r.id === id ? { ...r, ...changes } : r))
+    const { error } = await supabase.from('routines').update(changes).eq('id', id).eq('user_id', userId)
+    if (error) console.error('updateRoutine error:', error)
+  }
+
+  const handleDragEnd = async ({ active, over }) => {
+    if (!over || active.id === over.id) return
+    const oldIdx = routines.findIndex(r => r.id === active.id)
+    const newIdx = routines.findIndex(r => r.id === over.id)
+    const reordered = arrayMove(routines, oldIdx, newIdx)
+    setRoutines(reordered)
+
+    // Update sort_order for all affected items
+    const updates = reordered.map((r, i) => ({ id: r.id, user_id: userId, name: r.name, emoji: r.emoji, sort_order: i }))
+    const { error } = await supabase.from('routines').upsert(updates)
+    if (error) console.error('handleDragEnd error:', error)
   }
 
   const doneCount = routines.filter(r => checks[r.id]).length
   const total = routines.length
   const percent = total === 0 ? 0 : Math.round((doneCount / total) * 100)
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div className="pt-4 pb-8">
-      {selectedRoutine && <RoutineCalendar routine={selectedRoutine} onClose={() => setSelectedRoutine(null)} />}
+      {selectedRoutine && (
+        <RoutineCalendar
+          routine={selectedRoutine}
+          allChecks={allChecks}
+          onClose={() => setSelectedRoutine(null)}
+        />
+      )}
 
       {/* 달성률 카드 */}
       <div className="mx-4 mb-5 bg-white rounded-3xl p-5 shadow-sm border border-gray-50">
@@ -246,23 +321,32 @@ export default function RoutineTab({ selectedDate }) {
 
       {/* 루틴 목록 */}
       <div className="px-4 space-y-2 mb-4">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={routines.map(r => r.id)} strategy={verticalListSortingStrategy}>
-            {routines.map(routine => (
-              <SortableRoutineItem
-                key={routine.id}
-                routine={routine}
-                checks={checks}
-                streaks={streaks}
-                editMode={editMode}
-                onToggle={toggleCheck}
-                onDelete={deleteRoutine}
-                onSelect={setSelectedRoutine}
-                onUpdate={updateRoutine}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
+        {routines.length === 0 && !showAdd ? (
+          <div className="text-center py-16 text-gray-300">
+            <p className="text-5xl mb-4">🌱</p>
+            <p className="text-sm font-medium">아직 루틴이 없어요</p>
+            <p className="text-xs mt-1">아래 버튼으로 첫 루틴을 추가해보세요</p>
+          </div>
+        ) : (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={routines.map(r => r.id)} strategy={verticalListSortingStrategy}>
+              {routines.map(routine => (
+                <SortableRoutineItem
+                  key={routine.id}
+                  routine={routine}
+                  checks={checks}
+                  allChecks={allChecks}
+                  dateKey={dateKey}
+                  editMode={editMode}
+                  onToggle={toggleCheck}
+                  onDelete={deleteRoutine}
+                  onSelect={setSelectedRoutine}
+                  onUpdate={updateRoutine}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        )}
       </div>
 
       {/* 루틴 추가 */}

@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useAuth } from './hooks/useAuth'
+import { supabase } from './lib/supabase'
 import RoutineTab from './components/RoutineTab'
 import TodoTab from './components/TodoTab'
+import AuthScreen from './components/AuthScreen'
 import './index.css'
 
 const QUOTES = [
@@ -40,53 +43,158 @@ function getLocalDateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
+async function migrateLocalStorageToSupabase(userId) {
+  if (localStorage.getItem('migrated_to_supabase') === 'true') return
+
+  try {
+    const today = getLocalDateKey(new Date())
+
+    // 1. routines
+    const routines = JSON.parse(localStorage.getItem('routines') || '[]')
+    if (routines.length > 0) {
+      const { error } = await supabase.from('routines').upsert(
+        routines.map((r, i) => ({ id: r.id, user_id: userId, name: r.name, emoji: r.emoji, sort_order: i }))
+      )
+      if (error) throw error
+    }
+
+    // 2. routine_checks (checked=true rows only)
+    const checkEntries = []
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith('checks_')) continue
+      const date = key.replace('checks_', '')
+      const checks = JSON.parse(localStorage.getItem(key) || '{}')
+      for (const [routineId, checked] of Object.entries(checks)) {
+        if (checked) checkEntries.push({ user_id: userId, routine_id: Number(routineId), date })
+      }
+    }
+    if (checkEntries.length > 0) {
+      const { error } = await supabase.from('routine_checks').upsert(checkEntries)
+      if (error) throw error
+    }
+
+    // 3. todos
+    const todos = JSON.parse(localStorage.getItem('todos') || '[]')
+    if (todos.length > 0) {
+      const { error } = await supabase.from('todos').upsert(
+        todos.map(t => ({
+          id: t.id, user_id: userId, name: t.name, emoji: t.emoji || '📌',
+          done: t.done || false, done_at: t.done ? today : null,
+          when: t.when || null, deadline: t.deadline || null,
+        }))
+      )
+      if (error) throw error
+    }
+
+    // 4. todo_tags
+    const tags = JSON.parse(localStorage.getItem('todo_tags') || '[]')
+    if (tags.length > 0) {
+      const { error } = await supabase.from('todo_tags').upsert(
+        tags.map(t => ({ id: t.id, user_id: userId, name: t.name, color_index: t.colorIndex || 0 }))
+      )
+      if (error) throw error
+    }
+
+    // 5. todo_tag_links
+    const linkEntries = []
+    for (const todo of todos) {
+      for (const tagId of (todo.tags || [])) {
+        linkEntries.push({ todo_id: todo.id, tag_id: tagId, user_id: userId })
+      }
+    }
+    if (linkEntries.length > 0) {
+      const { error } = await supabase.from('todo_tag_links').upsert(linkEntries)
+      if (error) throw error
+    }
+
+    localStorage.setItem('migrated_to_supabase', 'true')
+  } catch (err) {
+    console.error('Migration failed:', err)
+  }
+}
+
 export default function App() {
+  const { user, loading, signInWithGoogle, signOut } = useAuth()
+  const dateInputRef = useRef(null)
   const [tab, setTab] = useState('routine')
+  const [migrating, setMigrating] = useState(false)
+
   const now = new Date()
   const todayKey = getLocalDateKey(now)
   const [selectedDate, setSelectedDate] = useState(todayKey)
 
-  const isToday = selectedDate === todayKey
+  useEffect(() => {
+    if (!user) return
+    if (localStorage.getItem('migrated_to_supabase') === 'true') return
+    setMigrating(true)
+    migrateLocalStorageToSupabase(user.id).finally(() => setMigrating(false))
+  }, [user])
 
+  if (loading || migrating) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#f0fdf4]">
+        <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <AuthScreen onSignIn={signInWithGoogle} />
+  }
+
+  const isToday = selectedDate === todayKey
   const displayDate = new Date(selectedDate + 'T00:00:00').toLocaleDateString('ko-KR', {
     year: 'numeric', month: 'long', day: 'numeric', weekday: 'short'
   })
-
-  // 날짜 기반으로 매일 다른 명언
   const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000)
   const quote = QUOTES[dayOfYear % QUOTES.length]
 
   return (
     <div className="flex flex-col min-h-screen bg-[#f0fdf4]">
-      {/* 헤더 */}
       <div className="px-5 pt-14 pb-4 bg-white border-b border-gray-100">
         <div className="flex items-center justify-between mb-1">
-          <label className="flex items-center gap-1 cursor-pointer">
-            <span className={`text-base font-semibold ${isToday ? 'text-gray-800' : 'text-emerald-500'}`}>
-              {displayDate}
-            </span>
-            <span className="text-gray-300 text-sm">▾</span>
+          <div className="relative flex items-center gap-1">
+            <button
+              onClick={() => {
+                try { dateInputRef.current?.showPicker() }
+                catch { dateInputRef.current?.click() }
+              }}
+              className="flex items-center gap-1 cursor-pointer"
+            >
+              <span className={`text-base font-semibold ${isToday ? 'text-gray-800' : 'text-emerald-500'}`}>
+                {displayDate}
+              </span>
+              <span className="text-gray-300 text-sm">▾</span>
+            </button>
             <input
+              ref={dateInputRef}
               type="date"
               value={selectedDate}
               max={todayKey}
               onChange={e => e.target.value && setSelectedDate(e.target.value)}
-              className="absolute opacity-0 w-0 h-0"
+              className="absolute opacity-0 top-0 left-0 w-8 h-8"
             />
-          </label>
-          {!isToday && (
+          </div>
+          <div className="flex items-center gap-2">
+            {!isToday && (
+              <button
+                onClick={() => setSelectedDate(todayKey)}
+                className="text-xs text-emerald-500 bg-emerald-50 px-2.5 py-1 rounded-full font-medium"
+              >
+                오늘로
+              </button>
+            )}
             <button
-              onClick={() => setSelectedDate(todayKey)}
-              className="text-xs text-emerald-500 bg-emerald-50 px-2.5 py-1 rounded-full font-medium"
+              onClick={signOut}
+              className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full"
             >
-              오늘로
+              로그아웃
             </button>
-          )}
+          </div>
         </div>
         <p className="text-xs text-gray-400 italic">"{quote}"</p>
       </div>
 
-      {/* 탭 */}
       <div className="flex border-b border-gray-100 bg-white">
         {['routine', 'todo'].map(t => (
           <button
@@ -101,9 +209,11 @@ export default function App() {
         ))}
       </div>
 
-      {/* 컨텐츠 */}
       <div className="flex-1 overflow-auto pb-10">
-        {tab === 'routine' ? <RoutineTab selectedDate={selectedDate} /> : <TodoTab />}
+        {tab === 'routine'
+          ? <RoutineTab selectedDate={selectedDate} userId={user.id} />
+          : <TodoTab userId={user.id} />
+        }
       </div>
     </div>
   )
