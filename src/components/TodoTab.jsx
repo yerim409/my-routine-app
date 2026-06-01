@@ -361,7 +361,7 @@ export default function TodoTab({ userId }) {
       </div>
 
       {/* 완료 아카이브 */}
-      <TodoArchive doneTodos={done} tags={tags} />
+      <TodoArchive doneTodos={done} tags={tags} onUpdate={updateTodo} onCreateTag={createTag} />
     </div>
   )
 }

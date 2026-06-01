@@ -20,11 +20,96 @@ function TagChip({ tag }) {
   )
 }
 
-function CompletedTodoItem({ todo, tags }) {
-  const todoTags = tags.filter(t => (todo.tag_ids || []).includes(t.id))
+function TagSelectorSimple({ tags, selectedIds, onToggle, onCreateTag }) {
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
+  const handleCreate = () => {
+    if (!newName.trim()) return
+    onCreateTag(newName.trim())
+    setNewName('')
+    setAdding(false)
+  }
   return (
-    <div className="bg-white rounded-2xl px-4 py-3.5 shadow-sm border border-gray-50 flex items-center gap-3 opacity-60">
-      <div className="w-6 h-6 rounded-full bg-emerald-400 border-emerald-400 flex items-center justify-center flex-shrink-0">
+    <div>
+      <p className="text-xs text-gray-400 mb-2 px-1">태그</p>
+      <div className="flex flex-wrap gap-1.5">
+        {tags.map(tag => {
+          const color = TAG_COLORS[tag.color_index % TAG_COLORS.length]
+          const selected = selectedIds.includes(tag.id)
+          return (
+            <button key={tag.id} onClick={() => onToggle(tag.id)}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all
+                ${selected ? `${color.bg} ${color.text} ring-2 ring-offset-1 ring-current` : `${color.bg} ${color.text} opacity-70`}`}>
+              {tag.name}
+            </button>
+          )
+        })}
+        {adding ? (
+          <div className="flex items-center gap-1">
+            <input autoFocus type="text" value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setAdding(false) }}
+              placeholder="태그명"
+              className="w-20 bg-gray-50 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+            <button onClick={handleCreate} className="text-xs text-emerald-500 font-medium">추가</button>
+            <button onClick={() => setAdding(false)} className="text-xs text-gray-400">취소</button>
+          </div>
+        ) : (
+          <button onClick={() => setAdding(true)}
+            className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-400 hover:bg-gray-200 transition-all">
+            + 새 태그
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CompletedTodoItem({ todo, tags, onUpdate, onCreateTag }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState({ name: todo.name, emoji: todo.emoji, tag_ids: todo.tag_ids || [] })
+  const todoTags = tags.filter(t => (todo.tag_ids || []).includes(t.id))
+
+  const saveEdit = () => {
+    if (draft.name.trim()) onUpdate(todo.id, { name: draft.name.trim(), emoji: draft.emoji, tag_ids: draft.tag_ids })
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-100">
+        <div className="flex gap-2 mb-3">
+          <input type="text" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })}
+            className="flex-1 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" autoFocus />
+          <input type="text" value={draft.emoji} onChange={e => setDraft({ ...draft, emoji: e.target.value })}
+            className="w-14 bg-gray-50 rounded-xl px-2 py-2.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+        </div>
+        <div className="mb-3">
+          <TagSelectorSimple
+            tags={tags}
+            selectedIds={draft.tag_ids}
+            onToggle={id => setDraft(prev => ({
+              ...prev,
+              tag_ids: prev.tag_ids.includes(id) ? prev.tag_ids.filter(t => t !== id) : [...prev.tag_ids, id]
+            }))}
+            onCreateTag={async (name) => {
+              const id = await onCreateTag(name)
+              setDraft(prev => ({ ...prev, tag_ids: [...prev.tag_ids, id] }))
+            }}
+          />
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setEditing(false)} className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 bg-gray-50">취소</button>
+          <button onClick={saveEdit} className="flex-1 py-2.5 rounded-xl text-sm text-white bg-emerald-400 font-medium">저장</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-2xl px-4 py-3.5 shadow-sm border border-gray-50 flex items-center gap-3 opacity-60"
+      onClick={() => setEditing(true)}>
+      <div className="w-6 h-6 rounded-full bg-emerald-400 flex items-center justify-center flex-shrink-0">
         <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
         </svg>
@@ -42,7 +127,7 @@ function CompletedTodoItem({ todo, tags }) {
   )
 }
 
-function BottomSheet({ date, todos, tags, onClose }) {
+function BottomSheet({ date, todos, tags, onUpdate, onCreateTag, onClose }) {
   const items = todos.filter(t => t.done_at === date)
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end" onClick={onClose}>
@@ -51,16 +136,16 @@ function BottomSheet({ date, todos, tags, onClose }) {
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-bold text-gray-900">
-            {date} 완료한 일
-          </h2>
+          <h2 className="text-base font-bold text-gray-900">{date} 완료한 일</h2>
           <button onClick={onClose} className="text-gray-300 text-xl p-1">✕</button>
         </div>
         {items.length === 0 ? (
           <p className="text-sm text-gray-300 text-center py-8">완료한 항목이 없어요</p>
         ) : (
           <div className="space-y-2">
-            {items.map(todo => <CompletedTodoItem key={todo.id} todo={todo} tags={tags} />)}
+            {items.map(todo => (
+              <CompletedTodoItem key={todo.id} todo={todo} tags={tags} onUpdate={onUpdate} onCreateTag={onCreateTag} />
+            ))}
           </div>
         )}
       </div>
@@ -68,7 +153,7 @@ function BottomSheet({ date, todos, tags, onClose }) {
   )
 }
 
-function ArchiveCalendar({ doneTodos, tags }) {
+function ArchiveCalendar({ doneTodos, tags, onUpdate, onCreateTag }) {
   const now = new Date()
   const [viewYear, setViewYear] = useState(now.getFullYear())
   const [viewMonth, setViewMonth] = useState(now.getMonth())
@@ -101,6 +186,8 @@ function ArchiveCalendar({ doneTodos, tags }) {
           date={selectedDate}
           todos={doneTodos}
           tags={tags}
+          onUpdate={onUpdate}
+          onCreateTag={onCreateTag}
           onClose={() => setSelectedDate(null)}
         />
       )}
@@ -158,7 +245,7 @@ function ArchiveCalendar({ doneTodos, tags }) {
   )
 }
 
-function TagSection({ tag, todos, tags }) {
+function TagSection({ tag, todos, tags, onUpdate, onCreateTag }) {
   const [open, setOpen] = useState(false)
   const items = tag === null
     ? todos.filter(t => !t.tag_ids || t.tag_ids.length === 0)
@@ -171,10 +258,7 @@ function TagSection({ tag, todos, tags }) {
 
   return (
     <div className="mx-4">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between py-2.5 px-1"
-      >
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between py-2.5 px-1">
         <div className="flex items-center gap-2">
           <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text}`}>{label}</span>
           <span className="text-xs text-gray-400">{items.length}개</span>
@@ -185,14 +269,16 @@ function TagSection({ tag, todos, tags }) {
       </button>
       {open && (
         <div className="space-y-2 pb-2">
-          {items.map(todo => <CompletedTodoItem key={todo.id} todo={todo} tags={tags} />)}
+          {items.map(todo => (
+            <CompletedTodoItem key={todo.id} todo={todo} tags={tags} onUpdate={onUpdate} onCreateTag={onCreateTag} />
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-export default function TodoArchive({ doneTodos, tags }) {
+export default function TodoArchive({ doneTodos, tags, onUpdate, onCreateTag }) {
   if (doneTodos.length === 0) return null
 
   return (
@@ -201,15 +287,13 @@ export default function TodoArchive({ doneTodos, tags }) {
         <p className="text-xs font-semibold text-gray-300 uppercase tracking-wider">완료된 할 일</p>
       </div>
 
-      {/* Calendar */}
-      <ArchiveCalendar doneTodos={doneTodos} tags={tags} />
+      <ArchiveCalendar doneTodos={doneTodos} tags={tags} onUpdate={onUpdate} onCreateTag={onCreateTag} />
 
-      {/* Tag sections */}
       <div className="mt-4 space-y-1">
         {tags.map(tag => (
-          <TagSection key={tag.id} tag={tag} todos={doneTodos} tags={tags} />
+          <TagSection key={tag.id} tag={tag} todos={doneTodos} tags={tags} onUpdate={onUpdate} onCreateTag={onCreateTag} />
         ))}
-        <TagSection tag={null} todos={doneTodos} tags={tags} />
+        <TagSection tag={null} todos={doneTodos} tags={tags} onUpdate={onUpdate} onCreateTag={onCreateTag} />
       </div>
     </div>
   )
