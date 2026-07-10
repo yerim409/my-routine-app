@@ -53,6 +53,7 @@ function SortableRoutineItem({ routine, checks, allChecks, dateKey, editMode, on
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(routine.name)
   const [editEmoji, setEditEmoji] = useState(routine.emoji)
+  const [editTarget, setEditTarget] = useState(routine.weekly_target ?? null)
   const inputRef = useRef(null)
 
   const style = {
@@ -63,7 +64,7 @@ function SortableRoutineItem({ routine, checks, allChecks, dateKey, editMode, on
 
   const saveEdit = () => {
     if (editName.trim()) {
-      onUpdate(routine.id, { name: editName.trim(), emoji: editEmoji })
+      onUpdate(routine.id, { name: editName.trim(), emoji: editEmoji, weekly_target: editTarget })
     }
     setEditing(false)
   }
@@ -110,23 +111,37 @@ function SortableRoutineItem({ routine, checks, allChecks, dateKey, editMode, on
       )}
 
       {editing ? (
-        <>
-          <input
-            type="text"
-            value={editEmoji}
-            onChange={e => setEditEmoji(e.target.value)}
-            className="w-10 text-center text-lg bg-gray-50 rounded-lg p-1 focus:outline-none"
-          />
-          <input
-            ref={inputRef}
-            type="text"
-            value={editName}
-            onChange={e => setEditName(e.target.value)}
-            onBlur={saveEdit}
-            onKeyDown={e => e.key === 'Enter' && saveEdit()}
-            className="flex-1 text-sm font-medium bg-gray-50 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-300"
-          />
-        </>
+        <div className="flex-1">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={editEmoji}
+              onChange={e => setEditEmoji(e.target.value)}
+              className="w-10 text-center text-lg bg-gray-50 rounded-lg p-1 focus:outline-none"
+            />
+            <input
+              ref={inputRef}
+              type="text"
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              onBlur={saveEdit}
+              onKeyDown={e => e.key === 'Enter' && saveEdit()}
+              className="flex-1 text-sm font-medium bg-gray-50 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            />
+          </div>
+          <div className="flex gap-1.5 mt-2 flex-wrap">
+            {FREQ_OPTIONS.map(opt => (
+              <button
+                key={opt.label}
+                onPointerDown={e => e.preventDefault()}
+                onClick={() => setEditTarget(opt.value)}
+                className={`px-2 py-1 rounded-full text-xs font-medium transition-all ${editTarget === opt.value ? 'bg-emerald-400 text-white' : 'bg-gray-50 text-gray-400'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
       ) : (
         <>
           <span className="text-lg">{routine.emoji}</span>
