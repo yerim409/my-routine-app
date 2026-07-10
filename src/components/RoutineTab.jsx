@@ -100,7 +100,7 @@ function SortableRoutineItem({ routine, checks, allChecks, dateKey, editMode, on
       ) : (
         <button
           onClick={() => onToggle(routine.id)}
-          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${checks[routine.id] ? 'bg-emerald-400 border-emerald-400' : 'border-gray-200'}`}
+          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all active:scale-90 ${checks[routine.id] ? 'bg-emerald-400 border-emerald-400 check-pop' : 'border-gray-200'}`}
         >
           {checks[routine.id] && (
             <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -153,19 +153,31 @@ function SortableRoutineItem({ routine, checks, allChecks, dateKey, editMode, on
               {routine.name}
             </p>
             {isWeekly && !editMode && (
-              <p className={`text-xs mt-0.5 font-semibold ${weekCount >= routine.weekly_target ? 'text-emerald-500' : 'text-gray-400'}`}>
-                이번 주 {weekCount}/{routine.weekly_target}
-              </p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <div className="flex gap-1">
+                  {Array.from({ length: routine.weekly_target }, (_, i) => (
+                    <span
+                      key={i}
+                      className={`w-1.5 h-1.5 rounded-full transition-colors ${i < weekCount ? 'bg-emerald-400' : 'bg-gray-200'}`}
+                    />
+                  ))}
+                </div>
+                <span className={`text-xs font-semibold ${weekCount >= routine.weekly_target ? 'text-emerald-500' : 'text-gray-400'}`}>
+                  {weekCount}/{routine.weekly_target}
+                </span>
+              </div>
             )}
             {editMode && <p className="text-xs text-gray-300 mt-0.5">탭해서 수정</p>}
           </div>
 
           {!editMode && (
-            <div className="flex items-center gap-0.5 flex-shrink-0">
-              <span className={isStreakActive ? 'text-base' : 'text-base opacity-30'}>🔥</span>
-              <span className={`text-xs font-semibold ${isStreakActive ? 'text-orange-400' : 'text-gray-300'}`}>
-                {streak}{isWeekly ? '주' : ''}
-              </span>
+            <div className={`flex items-center gap-0.5 flex-shrink-0 px-2 py-1 rounded-full text-xs font-bold ${
+              isStreakActive
+                ? 'bg-gradient-to-r from-orange-50 to-amber-100 text-orange-500'
+                : 'bg-gray-50 text-gray-300'
+            }`}>
+              <span className={isStreakActive ? '' : 'opacity-30 grayscale'}>🔥</span>
+              <span>{streak}{isWeekly ? '주' : ''}</span>
             </div>
           )}
         </>
@@ -186,7 +198,6 @@ export default function RoutineTab({ selectedDate, userId }) {
   const dateKey = selectedDate || getTodayKey()
 
   const [routines, setRoutines] = useState([])
-  const [checks, setChecks] = useState({})
   const [allChecks, setAllChecks] = useState({})
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
@@ -223,7 +234,6 @@ export default function RoutineTab({ selectedDate, userId }) {
         map[date][routine_id] = true
       }
       setAllChecks(map)
-      setChecks(map[dateKey] || {})
       setLoading(false)
     }
 
@@ -231,10 +241,8 @@ export default function RoutineTab({ selectedDate, userId }) {
     return () => { cancelled = true }
   }, [userId])
 
-  // Update checks when dateKey changes
-  useEffect(() => {
-    setChecks(allChecks[dateKey] || {})
-  }, [dateKey, allChecks])
+  // 오늘(선택된 날짜)의 체크 상태는 allChecks에서 파생
+  const checks = allChecks[dateKey] || {}
 
   const toggleCheck = async (id) => {
     const isChecking = !checks[id]
@@ -242,7 +250,6 @@ export default function RoutineTab({ selectedDate, userId }) {
     // Optimistic update
     const newDayChecks = { ...checks, [id]: isChecking }
     if (!isChecking) delete newDayChecks[id]
-    setChecks(newDayChecks)
     setAllChecks(prev => ({ ...prev, [dateKey]: newDayChecks }))
 
     // Persist to Supabase
@@ -322,28 +329,45 @@ export default function RoutineTab({ selectedDate, userId }) {
         />
       )}
 
-      {/* 달성률 카드 */}
-      <div className="mx-4 mb-5 bg-white rounded-3xl p-5 shadow-sm border border-gray-50">
-        <div className="flex justify-between items-start mb-3">
-          <div>
-            <p className="text-xs text-gray-400 font-medium">오늘 달성률</p>
-            <p className="text-3xl font-bold text-gray-900 mt-0.5">{percent}<span className="text-lg text-gray-400">%</span></p>
+      {/* 달성률 카드 — 100%면 축하 상태로 전환 */}
+      {(() => {
+        const perfect = total > 0 && percent === 100
+        return (
+          <div className={`mx-4 mb-5 rounded-3xl p-5 shadow-sm border transition-all duration-500 ${
+            perfect
+              ? 'bg-gradient-to-br from-emerald-400 to-teal-500 border-transparent shadow-emerald-200 shadow-lg'
+              : 'bg-white border-gray-50'
+          }`}>
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <p className={`text-xs font-medium ${perfect ? 'text-emerald-50' : 'text-gray-400'}`}>
+                  {perfect ? '🎉 완벽한 하루!' : '오늘 달성률'}
+                </p>
+                <p className={`text-3xl font-bold mt-0.5 ${perfect ? 'text-white' : 'text-gray-900'}`}>
+                  {percent}<span className={`text-lg ${perfect ? 'text-emerald-100' : 'text-gray-400'}`}>%</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <p className={`text-xs ${perfect ? 'text-emerald-50' : 'text-gray-400'}`}>{doneCount}/{total}</p>
+                <button
+                  onClick={() => setEditMode(!editMode)}
+                  className={`text-xs px-2.5 py-1 rounded-full font-medium transition-all ${
+                    editMode ? 'bg-emerald-400 text-white' : perfect ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-400'
+                  }`}
+                >
+                  {editMode ? '완료' : '편집'}
+                </button>
+              </div>
+            </div>
+            <div className={`w-full rounded-full h-2.5 ${perfect ? 'bg-white/25' : 'bg-gray-100'}`}>
+              <div
+                className={`h-2.5 rounded-full transition-all duration-700 ${perfect ? 'bg-white' : 'bg-gradient-to-r from-emerald-400 to-teal-400'}`}
+                style={{ width: `${percent}%` }}
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-gray-400">{doneCount}/{total}</p>
-            {percent === 100 && <span className="text-sm">🎉</span>}
-            <button
-              onClick={() => setEditMode(!editMode)}
-              className={`text-xs px-2.5 py-1 rounded-full font-medium transition-all ${editMode ? 'bg-emerald-400 text-white' : 'bg-gray-100 text-gray-400'}`}
-            >
-              {editMode ? '완료' : '편집'}
-            </button>
-          </div>
-        </div>
-        <div className="w-full bg-gray-100 rounded-full h-2.5">
-          <div className="bg-emerald-400 h-2.5 rounded-full transition-all duration-700" style={{ width: `${percent}%` }} />
-        </div>
-      </div>
+        )
+      })()}
 
       {/* 루틴 목록 */}
       <div className="px-4 space-y-2 mb-4">
