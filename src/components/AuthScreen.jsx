@@ -3,7 +3,7 @@ export default function AuthScreen({ onSignIn }) {
     <div className="flex flex-col items-center justify-center min-h-screen bg-[#f0fdf4] px-8">
       <div className="mb-8 text-center">
         <p className="text-5xl mb-4">🌱</p>
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">루틴 & 할 일</h1>
+        <h1 className="text-2xl font-bold text-gray-800 mb-2">MyRoutine</h1>
         <p className="text-sm text-gray-400">로그인하면 모든 기기에서 동기화돼요</p>
       </div>
       <button

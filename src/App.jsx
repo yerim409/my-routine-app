@@ -47,8 +47,6 @@ async function migrateLocalStorageToSupabase(userId) {
   if (localStorage.getItem('migrated_to_supabase') === 'true') return
 
   try {
-    const today = getLocalDateKey(new Date())
-
     // 1. routines
     const routines = JSON.parse(localStorage.getItem('routines') || '[]')
     if (routines.length > 0) {
@@ -126,6 +124,8 @@ export default function App() {
   useEffect(() => {
     if (!user) return
     if (localStorage.getItem('migrated_to_supabase') === 'true') return
+    // 일회성 마이그레이션 게이트 — 로그인 직후 한 번만 실행되는 외부 동기화라 예외 허용
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMigrating(true)
     migrateLocalStorageToSupabase(user.id).finally(() => setMigrating(false))
   }, [user])
@@ -150,32 +150,41 @@ export default function App() {
   const quote = QUOTES[dayOfYear % QUOTES.length]
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#f0fdf4]">
-      <div className="px-5 pt-14 pb-4 bg-white border-b border-gray-100">
-        <div className="flex items-center justify-between mb-1">
-          <div className="relative flex items-center gap-1">
+    <div className="min-h-screen bg-[#f0fdf4]">
+      <div className="mx-auto max-w-[480px] lg:max-w-5xl lg:px-6 flex flex-col min-h-screen">
+        <header className="px-5 pt-14 pb-4 bg-white border-b border-gray-100 lg:mt-6 lg:rounded-3xl lg:border lg:pt-5 lg:px-8">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-bold text-emerald-500 tracking-wide">🌱 MyRoutine</p>
             <button
-              onClick={() => {
-                try { dateInputRef.current?.showPicker() }
-                catch { dateInputRef.current?.click() }
-              }}
-              className="flex items-center gap-1 cursor-pointer"
+              onClick={signOut}
+              className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full"
             >
-              <span className={`text-base font-semibold ${isToday ? 'text-gray-800' : 'text-emerald-500'}`}>
-                {displayDate}
-              </span>
-              <span className="text-gray-300 text-sm">▾</span>
+              로그아웃
             </button>
-            <input
-              ref={dateInputRef}
-              type="date"
-              value={selectedDate}
-              max={todayKey}
-              onChange={e => e.target.value && setSelectedDate(e.target.value)}
-              className="absolute opacity-0 top-0 left-0 w-8 h-8"
-            />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between mb-1">
+            <div className="relative flex items-center gap-1">
+              <button
+                onClick={() => {
+                  try { dateInputRef.current?.showPicker() }
+                  catch { dateInputRef.current?.click() }
+                }}
+                className="flex items-center gap-1 cursor-pointer"
+              >
+                <span className={`text-base font-semibold ${isToday ? 'text-gray-800' : 'text-emerald-500'}`}>
+                  {displayDate}
+                </span>
+                <span className="text-gray-300 text-sm">▾</span>
+              </button>
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={selectedDate}
+                max={todayKey}
+                onChange={e => e.target.value && setSelectedDate(e.target.value)}
+                className="absolute opacity-0 top-0 left-0 w-8 h-8"
+              />
+            </div>
             {!isToday && (
               <button
                 onClick={() => setSelectedDate(todayKey)}
@@ -184,36 +193,34 @@ export default function App() {
                 오늘로
               </button>
             )}
-            <button
-              onClick={signOut}
-              className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full"
-            >
-              로그아웃
-            </button>
           </div>
-        </div>
-        <p className="text-xs text-gray-400 italic">"{quote}"</p>
-      </div>
+          <p className="text-xs text-gray-400 italic">"{quote}"</p>
+        </header>
 
-      <div className="flex border-b border-gray-100 bg-white">
-        {['routine', 'todo'].map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 py-3 text-sm font-semibold transition-all border-b-2 ${
-              tab === t ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-gray-400'
-            }`}
-          >
-            {t === 'routine' ? '🔄 루틴' : '✅ 할 일'}
-          </button>
-        ))}
-      </div>
+        <nav className="flex border-b border-gray-100 bg-white lg:hidden">
+          {['routine', 'todo'].map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 py-3 text-sm font-semibold transition-all border-b-2 ${
+                tab === t ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-gray-400'
+              }`}
+            >
+              {t === 'routine' ? '🔄 루틴' : '✅ 할 일'}
+            </button>
+          ))}
+        </nav>
 
-      <div className="flex-1 overflow-auto pb-10">
-        {tab === 'routine'
-          ? <RoutineTab selectedDate={selectedDate} userId={user.id} />
-          : <TodoTab userId={user.id} />
-        }
+        <main className="flex-1 pb-10 lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start lg:mt-2">
+          <section className={tab === 'routine' ? 'block' : 'hidden lg:block'}>
+            <h2 className="hidden lg:block px-4 pt-4 text-sm font-bold text-gray-400">🔄 루틴</h2>
+            <RoutineTab selectedDate={selectedDate} userId={user.id} />
+          </section>
+          <section className={tab === 'todo' ? 'block' : 'hidden lg:block'}>
+            <h2 className="hidden lg:block px-4 pt-4 text-sm font-bold text-gray-400">✅ 할 일</h2>
+            <TodoTab userId={user.id} />
+          </section>
+        </main>
       </div>
     </div>
   )

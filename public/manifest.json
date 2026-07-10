@@ -1,6 +1,6 @@
 {
-  "name": "예림의 루틴",
-  "short_name": "루틴",
+  "name": "MyRoutine",
+  "short_name": "MyRoutine",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f0fdf4",

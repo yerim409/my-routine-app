@@ -17,9 +17,9 @@ export default function RoutineCalendar({ routine, allChecks, onClose }) {
   const rate = Math.round((completedDays / today) * 100)
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end lg:items-center lg:justify-center" onClick={onClose}>
       <div
-        className="bg-white w-full rounded-t-3xl p-6 pb-10"
+        className="bg-white w-full rounded-t-3xl p-6 pb-10 lg:max-w-md lg:rounded-3xl lg:pb-6"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
