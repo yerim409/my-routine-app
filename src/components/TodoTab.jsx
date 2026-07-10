@@ -14,6 +14,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '../lib/supabase'
+import { formatRelativeDate, formatDday } from '../lib/dates'
 import TodoArchive from './TodoArchive'
 
 const TAG_COLORS = [
@@ -336,7 +337,10 @@ export default function TodoTab({ userId }) {
 
       {todoSections.map(({ label, items, color }) => items.length > 0 && (
         <div key={label} className="px-4 mb-5">
-          <p className={`text-xs font-semibold mb-2 px-1 ${color}`}>{label} {items.length}</p>
+          <p className={`text-xs font-semibold mb-2 px-1 flex items-center gap-1.5 ${color}`}>
+            {label}
+            <span className="text-[10px] font-bold bg-white rounded-full px-1.5 py-px border border-gray-100 text-gray-400">{items.length}</span>
+          </p>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -558,12 +562,17 @@ function TodoItem({ todo, tags, onToggle, onDelete, onUpdate, onCreateTag }) {
       <div className="flex-1 min-w-0" onClick={() => setEditing(true)}>
         <p className="text-sm font-medium text-gray-800">{todo.name}</p>
         <div className="flex gap-2 mt-0.5 flex-wrap items-center">
-          {todo.when && <span className="text-xs text-blue-400">📅 {todo.when}</span>}
-          {todo.deadline && (
-            <span className={`text-xs ${isOverdue ? 'text-red-400 font-medium' : 'text-gray-400'}`}>
-              {isOverdue ? '⚠️ ' : '⏰ '}{todo.deadline}
-            </span>
-          )}
+          {todo.when && <span className="text-xs text-blue-400">📅 {formatRelativeDate(todo.when, today)}</span>}
+          {todo.deadline && (() => {
+            const dday = formatDday(todo.deadline, today)
+            return (
+              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-md ${
+                dday.urgent ? 'bg-red-50 text-red-400' : 'bg-gray-50 text-gray-400'
+              }`}>
+                {isOverdue ? '⚠️ ' : '⏰ '}{dday.label}
+              </span>
+            )
+          })()}
           {todoTags.map(tag => (
             <TagChip key={tag.id} tag={tag} selected={false} onClick={() => {}} />
           ))}

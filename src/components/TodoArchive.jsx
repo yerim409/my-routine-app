@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { formatRelativeDate } from '../lib/dates'
 
 const TAG_COLORS = [
   { bg: 'bg-sky-100', text: 'text-sky-600' },
@@ -147,8 +148,9 @@ function CompletedTodoItem({ todo, tags, onUpdate, onCreateTag }) {
         <p className="text-sm font-medium text-gray-400 line-through">{todo.name}</p>
         {(todo.when || todo.deadline) && (
           <div className="flex gap-2 mt-0.5 flex-wrap items-center">
-            {todo.when && <span className="text-xs text-blue-300">📅 {todo.when}</span>}
-            {todo.deadline && <span className="text-xs text-gray-300">⏰ {todo.deadline}</span>}
+            {/* 완료된 항목엔 D-day·경고색 없이 날짜만 담백하게 */}
+            {todo.when && <span className="text-xs text-blue-300">📅 {formatRelativeDate(todo.when)}</span>}
+            {todo.deadline && <span className="text-xs text-gray-300">⏰ {formatRelativeDate(todo.deadline)}</span>}
           </div>
         )}
         {todoTags.length > 0 && (

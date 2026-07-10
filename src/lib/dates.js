@@ -21,6 +21,32 @@ export function getPrevDateKey(dateKey) {
   return getDateKey(date)
 }
 
+export function getNextDateKey(dateKey) {
+  const date = parseDateKey(dateKey)
+  date.setDate(date.getDate() + 1)
+  return getDateKey(date)
+}
+
+// '2026-07-15' → '오늘' / '내일' / '어제' / '7/15' / (연도 다르면) '2025.12.30'
+export function formatRelativeDate(dateKey, todayKey = getTodayKey()) {
+  if (dateKey === todayKey) return '오늘'
+  if (dateKey === getNextDateKey(todayKey)) return '내일'
+  if (dateKey === getPrevDateKey(todayKey)) return '어제'
+  const d = parseDateKey(dateKey)
+  const t = parseDateKey(todayKey)
+  return d.getFullYear() === t.getFullYear()
+    ? `${d.getMonth() + 1}/${d.getDate()}`
+    : `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`
+}
+
+// 기한 → D-day 표기. urgent는 3일 이내/지남 (경고색 판단용)
+export function formatDday(deadlineKey, todayKey = getTodayKey()) {
+  const diff = Math.round((parseDateKey(deadlineKey) - parseDateKey(todayKey)) / 86400000)
+  if (diff < 0) return { label: '지남', urgent: true }
+  if (diff === 0) return { label: '오늘까지', urgent: true }
+  return { label: `D-${diff}`, urgent: diff <= 3 }
+}
+
 // 해당 날짜가 속한 주(월요일 시작)의 월요일 dateKey
 export function getWeekKey(dateKey) {
   const date = parseDateKey(dateKey)
