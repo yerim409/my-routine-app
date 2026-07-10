@@ -1,4 +1,18 @@
 import { useState, useEffect } from 'react'
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '../lib/supabase'
 import TodoArchive from './TodoArchive'
 
@@ -13,12 +27,18 @@ const TAG_COLORS = [
   { bg: 'bg-blue-100', text: 'text-blue-600' },
 ]
 
+const WEEKDAY_LABELS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일']
+
 function toDateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function getTodayKey() {
   return toDateKey(new Date())
+}
+
+function getTodoOrder(todo, index = 0) {
+  return Number.isFinite(todo.order_index) ? todo.order_index : index
 }
 
 function TagChip({ tag, selected, onClick, onDelete }) {
@@ -94,6 +114,11 @@ export default function TodoTab({ userId }) {
   const [showAdd, setShowAdd] = useState(false)
   const [newTodo, setNewTodo] = useState({ name: '', deadline: '', when: '', emoji: '📌', tag_ids: [] })
   const [loading, setLoading] = useState(true)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    })
+  )
 
   // Load todos, tags, and tag links
   useEffect(() => {
@@ -115,7 +140,11 @@ export default function TodoTab({ userId }) {
         if (!linkMap[todo_id]) linkMap[todo_id] = []
         linkMap[todo_id].push(tag_id)
       }
-      const todosWithTags = (todosData || []).map(t => ({ ...t, tag_ids: linkMap[t.id] || [] }))
+      const todosWithTags = (todosData || []).map((t, index) => ({
+        ...t,
+        order_index: getTodoOrder(t, index),
+        tag_ids: linkMap[t.id] || [],
+      }))
 
       setTodos(todosWithTags)
       setTags(tagsData || [])
@@ -135,20 +164,13 @@ export default function TodoTab({ userId }) {
     return id
   }
 
-  const deleteTag = async (tagId) => {
-    setTags(prev => prev.filter(t => t.id !== tagId))
-    setTodos(prev => prev.map(t => ({ ...t, tag_ids: (t.tag_ids || []).filter(id => id !== tagId) })))
-    if (filterTag === tagId) setFilterTag(null)
-    const { error } = await supabase.from('todo_tags').delete().eq('id', tagId).eq('user_id', userId)
-    if (error) console.error('deleteTag error:', error)
-  }
-
   const addTodo = async () => {
     if (!newTodo.name.trim()) return
     const id = Date.now()
     const todo = {
       id, user_id: userId, name: newTodo.name.trim(), emoji: newTodo.emoji || '📌',
       done: false, done_at: null, when: newTodo.when || null, deadline: newTodo.deadline || null,
+      order_index: todos.length,
       tag_ids: newTodo.tag_ids,
     }
     setTodos(prev => [...prev, todo])
@@ -161,6 +183,10 @@ export default function TodoTab({ userId }) {
     })
     if (error) { console.error('addTodo error:', error); return }
 
+    await supabase.from('todos')
+      .update({ order_index: todo.order_index })
+      .eq('id', id).eq('user_id', userId)
+
     if (todo.tag_ids.length > 0) {
       const links = todo.tag_ids.map(tagId => ({ todo_id: id, tag_id: tagId, user_id: userId }))
       const { error: le } = await supabase.from('todo_tag_links').insert(links)
@@ -171,7 +197,7 @@ export default function TodoTab({ userId }) {
   const toggleDone = async (id) => {
     const todo = todos.find(t => t.id === id)
     const newDone = !todo.done
-    const newDoneAt = newDone ? getTodayKey() : null
+    const newDoneAt = newDone ? (todo.when || null) : null
 
     setTodos(prev => prev.map(t => t.id === id ? { ...t, done: newDone, done_at: newDoneAt } : t))
 
@@ -207,6 +233,32 @@ export default function TodoTab({ userId }) {
     if (error) console.error('deleteTodo error:', error)
   }
 
+  const reorderTodos = async (activeId, overId, items) => {
+    if (!overId || activeId === overId) return
+
+    const oldIndex = items.findIndex(t => t.id === activeId)
+    const newIndex = items.findIndex(t => t.id === overId)
+    if (oldIndex < 0 || newIndex < 0) return
+
+    const reordered = arrayMove(items, oldIndex, newIndex).map((todo, index) => ({
+      ...todo,
+      order_index: index,
+    }))
+
+    setTodos(prev => prev.map(todo => reordered.find(t => t.id === todo.id) || todo))
+
+    const updates = reordered.map(todo =>
+      supabase.from('todos')
+        .update({ order_index: todo.order_index })
+        .eq('id', todo.id)
+        .eq('user_id', userId)
+    )
+    const results = await Promise.all(updates)
+    results.forEach(({ error }) => {
+      if (error) console.error('reorderTodos error:', error)
+    })
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -218,19 +270,36 @@ export default function TodoTab({ userId }) {
   const now = new Date()
   const todayKey = toDateKey(now)
   const tomorrowKey = toDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))
-  const weekEndKey = toDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7))
-  const byDate = (a, b) => (a.when || '9999').localeCompare(b.when || '9999')
+  const daysUntilSunday = (7 - now.getDay()) % 7
+  const currentWeekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilSunday)
+  const currentWeekEndKey = toDateKey(currentWeekEnd)
+  const nextWeekEndKey = toDateKey(new Date(currentWeekEnd.getFullYear(), currentWeekEnd.getMonth(), currentWeekEnd.getDate() + 7))
+  const byOrder = (a, b) => getTodoOrder(a) - getTodoOrder(b) || (a.created_at || '').localeCompare(b.created_at || '')
 
   // Only show pending todos in main list
   const pending = todos.filter(t => !t.done)
   const done = todos.filter(t => t.done)
 
   const filtered = filterTag ? pending.filter(t => (t.tag_ids || []).includes(filterTag)) : pending
-  const pastTodos = filtered.filter(t => t.when && t.when < todayKey).sort(byDate)
-  const todayTodos = filtered.filter(t => t.when === todayKey).sort(byDate)
-  const tomorrowTodos = filtered.filter(t => t.when === tomorrowKey).sort(byDate)
-  const weekTodos = filtered.filter(t => t.when > tomorrowKey && t.when <= weekEndKey).sort(byDate)
-  const laterTodos = filtered.filter(t => !t.when || t.when > weekEndKey).sort(byDate)
+  const pastTodos = filtered.filter(t => t.when && t.when < todayKey).sort(byOrder)
+  const thisWeekSections = Array.from({ length: daysUntilSunday + 1 }, (_, offset) => {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset)
+    const dateKey = toDateKey(date)
+    const suffix = dateKey === todayKey ? ' (오늘)' : dateKey === tomorrowKey ? ' (내일)' : ''
+    return {
+      label: `${WEEKDAY_LABELS[date.getDay()]}${suffix}`,
+      items: filtered.filter(t => t.when === dateKey).sort(byOrder),
+      color: dateKey === todayKey ? 'text-emerald-400' : dateKey === tomorrowKey ? 'text-blue-400' : 'text-violet-400',
+    }
+  })
+  const nextWeekTodos = filtered.filter(t => t.when > currentWeekEndKey && t.when <= nextWeekEndKey).sort(byOrder)
+  const laterTodos = filtered.filter(t => !t.when || t.when > nextWeekEndKey).sort(byOrder)
+  const todoSections = [
+    { label: '지난', items: pastTodos, color: 'text-red-400' },
+    ...thisWeekSections,
+    { label: '다음 주', items: nextWeekTodos, color: 'text-indigo-400' },
+    { label: '나중에', items: laterTodos, color: 'text-gray-400' },
+  ]
 
   return (
     <div className="pt-4 pb-8">
@@ -265,29 +334,30 @@ export default function TodoTab({ userId }) {
         </div>
       )}
 
-      {[
-        { label: '지난', items: pastTodos, color: 'text-red-400' },
-        { label: '오늘', items: todayTodos, color: 'text-emerald-400' },
-        { label: '내일', items: tomorrowTodos, color: 'text-blue-400' },
-        { label: '이번 주', items: weekTodos, color: 'text-violet-400' },
-        { label: '나중에', items: laterTodos, color: 'text-gray-400' },
-      ].map(({ label, items, color }) => items.length > 0 && (
+      {todoSections.map(({ label, items, color }) => items.length > 0 && (
         <div key={label} className="px-4 mb-5">
           <p className={`text-xs font-semibold mb-2 px-1 ${color}`}>{label} {items.length}</p>
-          <div className="space-y-2">
-            {items.map(todo => (
-              <TodoItem
-                key={todo.id}
-                todo={todo}
-                tags={tags}
-                onToggle={toggleDone}
-                onDelete={deleteTodo}
-                onUpdate={updateTodo}
-                onCreateTag={createTag}
-                onDeleteTag={deleteTag}
-              />
-            ))}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={({ active, over }) => reorderTodos(active.id, over?.id, items)}
+          >
+            <SortableContext items={items.map(todo => todo.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {items.map(todo => (
+                  <TodoItem
+                    key={todo.id}
+                    todo={todo}
+                    tags={tags}
+                    onToggle={toggleDone}
+                    onDelete={deleteTodo}
+                    onUpdate={updateTodo}
+                    onCreateTag={createTag}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         </div>
       ))}
 
@@ -366,13 +436,21 @@ export default function TodoTab({ userId }) {
   )
 }
 
-function TodoItem({ todo, tags, onToggle, onDelete, onUpdate, onCreateTag, onDeleteTag }) {
+function TodoItem({ todo, tags, onToggle, onDelete, onUpdate, onCreateTag }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState({
     name: todo.name, emoji: todo.emoji,
     when: todo.when || '', deadline: todo.deadline || '',
     tag_ids: todo.tag_ids || []
   })
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: todo.id, disabled: editing })
   const today = getTodayKey()
   const isOverdue = todo.deadline && !todo.done && todo.deadline < today
 
@@ -448,7 +526,27 @@ function TodoItem({ todo, tags, onToggle, onDelete, onUpdate, onCreateTag, onDel
   }
 
   return (
-    <div className="bg-white rounded-2xl px-4 py-3.5 shadow-sm border border-gray-50 flex items-center gap-3">
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      className={`bg-white rounded-2xl px-3 py-3.5 shadow-sm border flex items-center gap-2 transition-shadow ${
+        isDragging ? 'border-emerald-200 shadow-lg z-10 opacity-95' : 'border-gray-50'
+      }`}
+    >
+      <button
+        type="button"
+        className="touch-none cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors p-1"
+        aria-label="할 일 순서 변경"
+        {...attributes}
+        {...listeners}
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h.01M8 12h.01M8 17h.01M16 7h.01M16 12h.01M16 17h.01" />
+        </svg>
+      </button>
       <button
         onClick={() => onToggle(todo.id)}
         className="w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all border-gray-200"

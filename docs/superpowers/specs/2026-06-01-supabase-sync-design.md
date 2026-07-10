@@ -72,6 +72,7 @@ CREATE TABLE todos (
   done_at    TEXT,  -- 'YYYY-MM-DD', 완료 처리한 날짜 (아카이브 달력 기준)
   "when"     TEXT,  -- 'YYYY-MM-DD'
   deadline   TEXT,  -- 'YYYY-MM-DD'
+  order_index INT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE todos ENABLE ROW LEVEL SECURITY;

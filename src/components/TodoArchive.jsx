@@ -20,6 +20,10 @@ function TagChip({ tag }) {
   )
 }
 
+function getArchiveDate(todo) {
+  return todo.when || null
+}
+
 function TagSelectorSimple({ tags, selectedIds, onToggle, onCreateTag }) {
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
@@ -67,11 +71,23 @@ function TagSelectorSimple({ tags, selectedIds, onToggle, onCreateTag }) {
 
 function CompletedTodoItem({ todo, tags, onUpdate, onCreateTag }) {
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState({ name: todo.name, emoji: todo.emoji, tag_ids: todo.tag_ids || [] })
+  const [draft, setDraft] = useState({
+    name: todo.name,
+    emoji: todo.emoji,
+    when: todo.when || '',
+    deadline: todo.deadline || '',
+    tag_ids: todo.tag_ids || [],
+  })
   const todoTags = tags.filter(t => (todo.tag_ids || []).includes(t.id))
 
   const saveEdit = () => {
-    if (draft.name.trim()) onUpdate(todo.id, { name: draft.name.trim(), emoji: draft.emoji, tag_ids: draft.tag_ids })
+    if (draft.name.trim()) onUpdate(todo.id, {
+      name: draft.name.trim(),
+      emoji: draft.emoji,
+      when: draft.when || null,
+      deadline: draft.deadline || null,
+      tag_ids: draft.tag_ids,
+    })
     setEditing(false)
   }
 
@@ -83,6 +99,18 @@ function CompletedTodoItem({ todo, tags, onUpdate, onCreateTag }) {
             className="flex-1 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" autoFocus />
           <input type="text" value={draft.emoji} onChange={e => setDraft({ ...draft, emoji: e.target.value })}
             className="w-14 bg-gray-50 rounded-xl px-2 py-2.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+        </div>
+        <div className="flex gap-2 mb-3">
+          <div className="flex-1">
+            <p className="text-xs text-gray-400 mb-1 px-1">할 날짜</p>
+            <input type="date" value={draft.when} onChange={e => setDraft({ ...draft, when: e.target.value })}
+              className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs text-gray-400 mb-1 px-1">기한</p>
+            <input type="date" value={draft.deadline} onChange={e => setDraft({ ...draft, deadline: e.target.value })}
+              className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+          </div>
         </div>
         <div className="mb-3">
           <TagSelectorSimple
@@ -117,6 +145,12 @@ function CompletedTodoItem({ todo, tags, onUpdate, onCreateTag }) {
       <span className="text-lg">{todo.emoji}</span>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-400 line-through">{todo.name}</p>
+        {(todo.when || todo.deadline) && (
+          <div className="flex gap-2 mt-0.5 flex-wrap items-center">
+            {todo.when && <span className="text-xs text-blue-300">📅 {todo.when}</span>}
+            {todo.deadline && <span className="text-xs text-gray-300">⏰ {todo.deadline}</span>}
+          </div>
+        )}
         {todoTags.length > 0 && (
           <div className="flex gap-1 mt-0.5 flex-wrap">
             {todoTags.map(tag => <TagChip key={tag.id} tag={tag} />)}
@@ -128,7 +162,7 @@ function CompletedTodoItem({ todo, tags, onUpdate, onCreateTag }) {
 }
 
 function BottomSheet({ date, todos, tags, onUpdate, onCreateTag, onClose }) {
-  const items = todos.filter(t => t.done_at === date)
+  const items = todos.filter(t => getArchiveDate(t) === date)
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end" onClick={onClose}>
       <div
@@ -164,7 +198,7 @@ function ArchiveCalendar({ doneTodos, tags, onUpdate, onCreateTag }) {
   const monthName = new Date(viewYear, viewMonth, 1).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })
 
   // Build set of dates with completed todos
-  const datesWithDone = new Set(doneTodos.map(t => t.done_at).filter(Boolean))
+  const datesWithDone = new Set(doneTodos.map(getArchiveDate).filter(Boolean))
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }

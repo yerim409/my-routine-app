@@ -7,6 +7,7 @@ CREATE TABLE routines (
   name       TEXT NOT NULL,
   emoji      TEXT NOT NULL DEFAULT '✨',
   sort_order INT NOT NULL DEFAULT 0,
+  weekly_target SMALLINT,  -- NULL = 매일, 1~6 = 주 N회
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE routines ENABLE ROW LEVEL SECURITY;
@@ -34,6 +35,7 @@ CREATE TABLE todos (
   done_at    TEXT,
   "when"     TEXT,
   deadline   TEXT,
+  order_index INT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE todos ENABLE ROW LEVEL SECURITY;
@@ -61,3 +63,6 @@ CREATE TABLE todo_tag_links (
 ALTER TABLE todo_tag_links ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "users own tag links" ON todo_tag_links
   USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- 2026-07-10: 주 N회 반복 규칙. 이미 생성된 DB에는 아래만 실행
+-- ALTER TABLE routines ADD COLUMN weekly_target SMALLINT;
