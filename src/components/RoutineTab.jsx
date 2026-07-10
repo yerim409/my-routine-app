@@ -16,21 +16,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '../lib/supabase'
 import RoutineCalendar from './RoutineCalendar'
-
-function getDateKey(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
-function getTodayKey() {
-  return getDateKey(new Date())
-}
-
-function getPrevDateKey(dateKey) {
-  const [y, m, d] = dateKey.split('-').map(Number)
-  const date = new Date(y, m - 1, d)
-  date.setDate(date.getDate() - 1)
-  return getDateKey(date)
-}
+import { getDateKey, getTodayKey, getPrevDateKey } from '../lib/dates'
 
 function calculateStreak(routineId, allChecks, dateKey) {
   const [y, m, d] = dateKey.split('-').map(Number)
