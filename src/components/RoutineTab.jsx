@@ -277,8 +277,11 @@ export default function RoutineTab({ selectedDate, userId }) {
     if (error) console.error('handleDragEnd error:', error)
   }
 
+  // 주 N회 루틴은 체크한 날만 분자·분모에 포함 — 체크하면 달성률이 오르고, 안 하면 영향 없음
   const doneCount = routines.filter(r => checks[r.id]).length
-  const total = routines.length
+  const dailyTotal = routines.filter(r => !r.weekly_target).length
+  const weeklyCheckedToday = routines.filter(r => r.weekly_target && checks[r.id]).length
+  const total = dailyTotal + weeklyCheckedToday
   const percent = total === 0 ? 0 : Math.round((doneCount / total) * 100)
 
   if (loading) {
