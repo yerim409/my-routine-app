@@ -16,7 +16,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '../lib/supabase'
 import RoutineCalendar from './RoutineCalendar'
-import { getDateKey, getTodayKey, getPrevDateKey } from '../lib/dates'
+import { getDateKey, getTodayKey, getPrevDateKey, getWeekKey, getPrevWeekKey, countWeekChecks, calculateWeeklyStreak } from '../lib/dates'
 
 function calculateStreak(routineId, allChecks, dateKey) {
   const [y, m, d] = dateKey.split('-').map(Number)
@@ -67,9 +67,21 @@ function SortableRoutineItem({ routine, checks, allChecks, dateKey, editMode, on
     if (editing && inputRef.current) inputRef.current.focus()
   }, [editing])
 
-  const { streak, lastCheckedDate } = calculateStreak(routine.id, allChecks, dateKey)
-  const prevDateKey = getPrevDateKey(dateKey)
-  const isStreakActive = streak > 0 && (lastCheckedDate === dateKey || lastCheckedDate === prevDateKey)
+  const isWeekly = !!routine.weekly_target
+  const weekKey = getWeekKey(dateKey)
+  const weekCount = isWeekly ? countWeekChecks(routine.id, allChecks, weekKey) : 0
+
+  let streak, isStreakActive
+  if (isWeekly) {
+    const { streak: s, lastAchievedWeek } = calculateWeeklyStreak(routine.id, routine.weekly_target, allChecks, dateKey)
+    streak = s
+    isStreakActive = streak > 0 && (lastAchievedWeek === weekKey || lastAchievedWeek === getPrevWeekKey(weekKey))
+  } else {
+    const { streak: s, lastCheckedDate } = calculateStreak(routine.id, allChecks, dateKey)
+    streak = s
+    const prevDateKey = getPrevDateKey(dateKey)
+    isStreakActive = streak > 0 && (lastCheckedDate === dateKey || lastCheckedDate === prevDateKey)
+  }
 
   return (
     <div ref={setNodeRef} style={style} className={`bg-white rounded-2xl px-4 py-3.5 shadow-sm border border-gray-50 flex items-center gap-3 ${checks[routine.id] && !editMode ? 'opacity-50' : ''}`}>
@@ -120,6 +132,11 @@ function SortableRoutineItem({ routine, checks, allChecks, dateKey, editMode, on
             <p className={`text-sm font-medium text-gray-800 ${checks[routine.id] && !editMode ? 'line-through text-gray-400' : ''}`}>
               {routine.name}
             </p>
+            {isWeekly && !editMode && (
+              <p className={`text-xs mt-0.5 font-semibold ${weekCount >= routine.weekly_target ? 'text-emerald-500' : 'text-gray-400'}`}>
+                이번 주 {weekCount}/{routine.weekly_target}
+              </p>
+            )}
             {editMode && <p className="text-xs text-gray-300 mt-0.5">탭해서 수정</p>}
           </div>
 
@@ -127,7 +144,7 @@ function SortableRoutineItem({ routine, checks, allChecks, dateKey, editMode, on
             <div className="flex items-center gap-0.5 flex-shrink-0">
               <span className={isStreakActive ? 'text-base' : 'text-base opacity-30'}>🔥</span>
               <span className={`text-xs font-semibold ${isStreakActive ? 'text-orange-400' : 'text-gray-300'}`}>
-                {streak}
+                {streak}{isWeekly ? '주' : ''}
               </span>
             </div>
           )}
