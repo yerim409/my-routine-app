@@ -18,6 +18,11 @@ import { supabase } from '../lib/supabase'
 import RoutineCalendar from './RoutineCalendar'
 import { getDateKey, getTodayKey, getPrevDateKey, getWeekKey, getPrevWeekKey, countWeekChecks, calculateWeeklyStreak } from '../lib/dates'
 
+const FREQ_OPTIONS = [
+  { label: '매일', value: null },
+  ...[1, 2, 3, 4, 5, 6].map(n => ({ label: `주 ${n}회`, value: n })),
+]
+
 function calculateStreak(routineId, allChecks, dateKey) {
   const [y, m, d] = dateKey.split('-').map(Number)
   const startDate = new Date(y, m - 1, d)
@@ -170,7 +175,7 @@ export default function RoutineTab({ selectedDate, userId }) {
   const [allChecks, setAllChecks] = useState({})
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
-  const [newRoutine, setNewRoutine] = useState({ name: '', emoji: '✨' })
+  const [newRoutine, setNewRoutine] = useState({ name: '', emoji: '✨', weekly_target: null })
   const [selectedRoutine, setSelectedRoutine] = useState(null)
   const [editMode, setEditMode] = useState(false)
 
@@ -242,10 +247,10 @@ export default function RoutineTab({ selectedDate, userId }) {
   const addRoutine = async () => {
     if (!newRoutine.name.trim()) return
     const id = Date.now()
-    const routine = { id, user_id: userId, name: newRoutine.name.trim(), emoji: newRoutine.emoji, sort_order: routines.length }
+    const routine = { id, user_id: userId, name: newRoutine.name.trim(), emoji: newRoutine.emoji, sort_order: routines.length, weekly_target: newRoutine.weekly_target }
 
     setRoutines(prev => [...prev, routine])
-    setNewRoutine({ name: '', emoji: '✨' })
+    setNewRoutine({ name: '', emoji: '✨', weekly_target: null })
     setShowAdd(false)
 
     const { error } = await supabase.from('routines').insert(routine)
@@ -376,6 +381,17 @@ export default function RoutineTab({ selectedDate, userId }) {
                 className="flex-1 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
                 autoFocus
               />
+            </div>
+            <div className="flex gap-1.5 mb-3 flex-wrap">
+              {FREQ_OPTIONS.map(opt => (
+                <button
+                  key={opt.label}
+                  onClick={() => setNewRoutine({ ...newRoutine, weekly_target: opt.value })}
+                  className={`px-2.5 py-1.5 rounded-full text-xs font-medium transition-all ${newRoutine.weekly_target === opt.value ? 'bg-emerald-400 text-white' : 'bg-gray-50 text-gray-400'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
             <div className="flex gap-2">
               <button onClick={() => setShowAdd(false)} className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 bg-gray-50">취소</button>
