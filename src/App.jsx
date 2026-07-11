@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth'
 import { supabase } from './lib/supabase'
 import RoutineTab from './components/RoutineTab'
 import TodoTab from './components/TodoTab'
+import StatsTab from './components/StatsTab'
 import AuthScreen from './components/AuthScreen'
 import './index.css'
 
@@ -155,13 +156,24 @@ export default function App() {
         <header className="px-5 pt-14 pb-4 bg-white border-b border-gray-100 lg:mt-6 lg:rounded-3xl lg:border lg:pt-5 lg:px-8">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-bold text-emerald-500 tracking-wide">🌱 MyRoutine</p>
-            <button
-              onClick={signOut}
-              className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full"
-            >
-              로그아웃
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTab(tab === 'stats' ? 'routine' : 'stats')}
+                className={`hidden lg:block text-xs px-2.5 py-1 rounded-full font-medium transition-all ${
+                  tab === 'stats' ? 'bg-emerald-400 text-white' : 'bg-gray-100 text-gray-400'
+                }`}
+              >
+                📊 통계
+              </button>
+              <button
+                onClick={signOut}
+                className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full"
+              >
+                로그아웃
+              </button>
+            </div>
           </div>
+          {tab !== 'stats' && (
           <div className="flex items-center justify-between mb-1">
             <div className="relative flex items-center gap-1">
               <button
@@ -194,11 +206,12 @@ export default function App() {
               </button>
             )}
           </div>
+          )}
           <p className="text-xs text-gray-400 italic">"{quote}"</p>
         </header>
 
         <nav className="flex border-b border-gray-100 bg-white lg:hidden">
-          {['routine', 'todo'].map(t => (
+          {['routine', 'todo', 'stats'].map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -206,21 +219,27 @@ export default function App() {
                 tab === t ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-gray-400'
               }`}
             >
-              {t === 'routine' ? '🔄 루틴' : '✅ 할 일'}
+              {t === 'routine' ? '🔄 루틴' : t === 'todo' ? '✅ 할 일' : '📊 통계'}
             </button>
           ))}
         </nav>
 
-        <main className="flex-1 pb-10 lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start lg:mt-2">
-          <section className={tab === 'routine' ? 'block' : 'hidden lg:block'}>
-            <h2 className="hidden lg:block px-4 pt-4 text-sm font-bold text-gray-400">🔄 루틴</h2>
-            <RoutineTab selectedDate={selectedDate} userId={user.id} />
-          </section>
-          <section className={tab === 'todo' ? 'block' : 'hidden lg:block'}>
-            <h2 className="hidden lg:block px-4 pt-4 text-sm font-bold text-gray-400">✅ 할 일</h2>
-            <TodoTab userId={user.id} />
-          </section>
-        </main>
+        {tab === 'stats' ? (
+          <main className="flex-1 pb-10 lg:mt-2">
+            <StatsTab userId={user.id} />
+          </main>
+        ) : (
+          <main className="flex-1 pb-10 lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start lg:mt-2">
+            <section className={tab === 'routine' ? 'block' : 'hidden lg:block'}>
+              <h2 className="hidden lg:block px-4 pt-4 text-sm font-bold text-gray-400">🔄 루틴</h2>
+              <RoutineTab selectedDate={selectedDate} userId={user.id} />
+            </section>
+            <section className={tab === 'todo' ? 'block' : 'hidden lg:block'}>
+              <h2 className="hidden lg:block px-4 pt-4 text-sm font-bold text-gray-400">✅ 할 일</h2>
+              <TodoTab userId={user.id} />
+            </section>
+          </main>
+        )}
       </div>
     </div>
   )

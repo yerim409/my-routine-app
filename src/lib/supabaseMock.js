@@ -23,6 +23,20 @@ function seedData() {
   const prevWeek = getWeekDateKeys(getPrevWeekKey(weekKey))
   const thisWeekSoFar = getWeekDateKeys(weekKey).filter(d => d <= today)
 
+  // 통계(히트맵/최장 스트릭)용 과거 이력: 지지난주부터 10주 전까지.
+  // 물(1)은 3일 중 2일 패턴, 스트레칭(2)은 주말 제외, 운동(3)은 월/수/금.
+  // 최근 2주는 아래 개별 시드가 담당하므로 여기선 건드리지 않는다 (기대값 보존).
+  const history = []
+  let wk = getPrevWeekKey(getPrevWeekKey(weekKey))
+  for (let w = 0; w < 8; w++) {
+    getWeekDateKeys(wk).forEach((date, dayIdx) => {
+      if ((w + dayIdx) % 3 !== 0) history.push({ user_id: uid, routine_id: 1, date })
+      if (dayIdx < 5) history.push({ user_id: uid, routine_id: 2, date })
+      if (dayIdx === 0 || dayIdx === 2 || dayIdx === 4) history.push({ user_id: uid, routine_id: 3, date })
+    })
+    wk = getPrevWeekKey(wk)
+  }
+
   return {
     routines: [
       { id: 1, user_id: uid, name: '물 2L 마시기', emoji: '💧', sort_order: 0, weekly_target: null },
@@ -41,6 +55,7 @@ function seedData() {
       { user_id: uid, routine_id: 3, date: prevWeek[2] },
       { user_id: uid, routine_id: 3, date: prevWeek[4] },
       ...thisWeekSoFar.slice(0, 2).map(date => ({ user_id: uid, routine_id: 3, date })),
+      ...history,
     ],
     todos: [
       { id: 101, user_id: uid, name: '국시 원서 접수', emoji: '📝', done: false, done_at: null, when: today, deadline: today, order_index: 0, created_at: '2026-07-01T09:00:00Z' },

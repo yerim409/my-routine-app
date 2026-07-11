@@ -198,7 +198,8 @@ export default function TodoTab({ userId }) {
   const toggleDone = async (id) => {
     const todo = todos.find(t => t.id === id)
     const newDone = !todo.done
-    const newDoneAt = newDone ? (todo.when || null) : null
+    // done_at은 실제 완료일 — 통계에서 "이번 주 완료" 집계에 쓰인다 (아카이브 그룹핑은 when 기준)
+    const newDoneAt = newDone ? getTodayKey() : null
 
     setTodos(prev => prev.map(t => t.id === id ? { ...t, done: newDone, done_at: newDoneAt } : t))
 
