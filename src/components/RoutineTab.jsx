@@ -16,37 +16,12 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '../lib/supabase'
 import RoutineCalendar from './RoutineCalendar'
-import { getDateKey, getTodayKey, getPrevDateKey, getWeekKey, getPrevWeekKey, countWeekChecks, calculateWeeklyStreak } from '../lib/dates'
+import { getTodayKey, getPrevDateKey, getWeekKey, getPrevWeekKey, countWeekChecks, calculateStreak, calculateWeeklyStreak } from '../lib/dates'
 
 const FREQ_OPTIONS = [
   { label: '매일', value: null },
   ...[1, 2, 3, 4, 5, 6].map(n => ({ label: `주 ${n}회`, value: n })),
 ]
-
-function calculateStreak(routineId, allChecks, dateKey) {
-  const [y, m, d] = dateKey.split('-').map(Number)
-  const startDate = new Date(y, m - 1, d)
-  let streak = 0
-  let lastCheckedDate = null
-
-  for (let i = 0; i < 365; i++) {
-    const cur = new Date(startDate)
-    cur.setDate(startDate.getDate() - i)
-    const ds = getDateKey(cur)
-    const dayChecks = allChecks[ds] || {}
-
-    if (dayChecks[routineId]) {
-      if (!lastCheckedDate) lastCheckedDate = ds
-      streak++
-    } else if (i === 0) {
-      continue
-    } else {
-      break
-    }
-  }
-
-  return { streak, lastCheckedDate }
-}
 
 function SortableRoutineItem({ routine, checks, allChecks, dateKey, editMode, onToggle, onDelete, onSelect, onUpdate }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: routine.id })

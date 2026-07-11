@@ -76,6 +76,30 @@ export function countWeekChecks(routineId, allChecks, weekKey) {
   return getWeekDateKeys(weekKey).filter(ds => allChecks[ds]?.[routineId]).length
 }
 
+// 매일 루틴의 현재 연속 일수. 기준일(i === 0)은 아직 안 했어도 스트릭을 깨지 않는다.
+export function calculateStreak(routineId, allChecks, dateKey) {
+  const startDate = parseDateKey(dateKey)
+  let streak = 0
+  let lastCheckedDate = null
+
+  for (let i = 0; i < 365; i++) {
+    const cur = new Date(startDate)
+    cur.setDate(startDate.getDate() - i)
+    const ds = getDateKey(cur)
+
+    if (allChecks[ds]?.[routineId]) {
+      if (!lastCheckedDate) lastCheckedDate = ds
+      streak++
+    } else if (i === 0) {
+      continue
+    } else {
+      break
+    }
+  }
+
+  return { streak, lastCheckedDate }
+}
+
 // 주 N회 루틴의 연속 달성 주 수.
 // 이번 주는 아직 진행 중이므로 목표 미달이어도 스트릭을 깨지 않는다 (i === 0 skip).
 export function calculateWeeklyStreak(routineId, weeklyTarget, allChecks, dateKey) {
