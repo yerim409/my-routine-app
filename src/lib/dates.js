@@ -39,6 +39,17 @@ export function formatRelativeDate(dateKey, todayKey = getTodayKey()) {
     : `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`
 }
 
+const WEEKDAY_SHORT = ['일', '월', '화', '수', '목', '금', '토']
+
+// 예정 리스트 행 라벨: '내일' / '수 7/15' / (연도 다르면) '2027.1.3'
+export function formatUpcomingLabel(dateKey, todayKey = getTodayKey()) {
+  if (dateKey === getNextDateKey(todayKey)) return '내일'
+  const d = parseDateKey(dateKey)
+  const t = parseDateKey(todayKey)
+  if (d.getFullYear() !== t.getFullYear()) return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`
+  return `${WEEKDAY_SHORT[d.getDay()]} ${d.getMonth() + 1}/${d.getDate()}`
+}
+
 // 기한 → D-day 표기. urgent는 3일 이내/지남 (경고색 판단용)
 export function formatDday(deadlineKey, todayKey = getTodayKey()) {
   const diff = Math.round((parseDateKey(deadlineKey) - parseDateKey(todayKey)) / 86400000)

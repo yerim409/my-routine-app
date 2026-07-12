@@ -1,6 +1,6 @@
 // VITE_MOCK=1 전용 인메모리 Supabase 목.
 // 로그인 없이 UI를 띄워보기 위한 개발 도구 — 프로덕션 빌드에는 포함되지 않는다.
-import { getTodayKey, getPrevDateKey, getWeekKey, getPrevWeekKey, getWeekDateKeys } from './dates'
+import { getTodayKey, getPrevDateKey, getNextDateKey, getWeekKey, getPrevWeekKey, getWeekDateKeys } from './dates'
 
 const MOCK_USER = { id: 'mock-user', email: 'mock@dev.local' }
 
@@ -61,6 +61,12 @@ function seedData() {
       { id: 101, user_id: uid, name: '국시 원서 접수', emoji: '📝', done: false, done_at: null, when: today, deadline: today, order_index: 0, created_at: '2026-07-01T09:00:00Z' },
       { id: 102, user_id: uid, name: 'CPX 스터디 자료 정리', emoji: '📚', done: false, done_at: null, when: null, deadline: null, order_index: 1, created_at: '2026-07-02T09:00:00Z' },
       { id: 103, user_id: uid, name: '안경 찾으러 가기', emoji: '👓', done: true, done_at: d1, when: d1, deadline: null, order_index: 2, created_at: '2026-07-03T09:00:00Z' },
+      // 투두 탭 검증용 케이스: 지난(기한 지남 포함)/오늘/예정/나중에 (미완료만 — 통계 기대값 보존)
+      { id: 104, user_id: uid, name: '보험 서류 제출', emoji: '📌', done: false, done_at: null, when: d2, deadline: d1, order_index: 3, created_at: '2026-07-04T09:00:00Z' },
+      { id: 105, user_id: uid, name: '기숙사 신청서 내기', emoji: '📌', done: false, done_at: null, when: d1, deadline: null, order_index: 4, created_at: '2026-07-05T09:00:00Z' },
+      { id: 106, user_id: uid, name: '모의고사 오답 정리', emoji: '📌', done: false, done_at: null, when: getNextDateKey(today), deadline: null, order_index: 5, created_at: '2026-07-06T09:00:00Z' },
+      { id: 107, user_id: uid, name: '멘토링 자료 준비', emoji: '📌', done: false, done_at: null, when: getNextDateKey(getNextDateKey(getNextDateKey(today))), deadline: getNextDateKey(getNextDateKey(getNextDateKey(today))), order_index: 6, created_at: '2026-07-07T09:00:00Z' },
+      { id: 108, user_id: uid, name: '독서: 제로 투 원', emoji: '📌', done: false, done_at: null, when: null, deadline: null, order_index: 7, created_at: '2026-07-08T09:00:00Z' },
     ],
     todo_tags: [
       { id: 201, user_id: uid, name: '공부', color_index: 0 },
@@ -70,6 +76,10 @@ function seedData() {
       { todo_id: 101, tag_id: 201, user_id: uid },
       { todo_id: 102, tag_id: 201, user_id: uid },
       { todo_id: 103, tag_id: 202, user_id: uid },
+      { todo_id: 104, tag_id: 202, user_id: uid },
+      { todo_id: 106, tag_id: 201, user_id: uid },
+      { todo_id: 107, tag_id: 201, user_id: uid },
+      { todo_id: 108, tag_id: 202, user_id: uid },
     ],
   }
 }

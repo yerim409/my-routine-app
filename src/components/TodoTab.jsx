@@ -14,47 +14,58 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '../lib/supabase'
-import { formatRelativeDate, formatDday } from '../lib/dates'
+import {
+  getTodayKey,
+  getNextDateKey,
+  formatRelativeDate,
+  formatUpcomingLabel,
+  formatDday,
+} from '../lib/dates'
 import TodoArchive from './TodoArchive'
 
 const TAG_COLORS = [
-  { bg: 'bg-sky-100', text: 'text-sky-600' },
-  { bg: 'bg-violet-100', text: 'text-violet-600' },
-  { bg: 'bg-rose-100', text: 'text-rose-600' },
-  { bg: 'bg-amber-100', text: 'text-amber-600' },
-  { bg: 'bg-emerald-100', text: 'text-emerald-600' },
-  { bg: 'bg-orange-100', text: 'text-orange-600' },
-  { bg: 'bg-pink-100', text: 'text-pink-600' },
-  { bg: 'bg-blue-100', text: 'text-blue-600' },
+  { bg: 'bg-sky-100', text: 'text-sky-600', dot: 'bg-sky-400' },
+  { bg: 'bg-violet-100', text: 'text-violet-600', dot: 'bg-violet-400' },
+  { bg: 'bg-rose-100', text: 'text-rose-600', dot: 'bg-rose-400' },
+  { bg: 'bg-amber-100', text: 'text-amber-600', dot: 'bg-amber-400' },
+  { bg: 'bg-emerald-100', text: 'text-emerald-600', dot: 'bg-emerald-400' },
+  { bg: 'bg-orange-100', text: 'text-orange-600', dot: 'bg-orange-400' },
+  { bg: 'bg-pink-100', text: 'text-pink-600', dot: 'bg-pink-400' },
+  { bg: 'bg-blue-100', text: 'text-blue-600', dot: 'bg-blue-400' },
 ]
 
 const WEEKDAY_LABELS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일']
-
-function toDateKey(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function getTodayKey() {
-  return toDateKey(new Date())
-}
 
 function getTodoOrder(todo, index = 0) {
   return Number.isFinite(todo.order_index) ? todo.order_index : index
 }
 
-function TagChip({ tag, selected, onClick, onDelete }) {
+function TagChip({ tag, selected, onClick }) {
   const color = TAG_COLORS[tag.color_index % TAG_COLORS.length]
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all
-        ${selected ? `${color.bg} ${color.text} ring-2 ring-offset-1 ring-current` : `${color.bg} ${color.text} opacity-70`}`}
+      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-all
+        ${selected ? `${color.bg} ${color.text}` : 'bg-transparent text-gray-400 hover:text-gray-500'}`}
     >
       {tag.name}
-      {onDelete && (
-        <span onClick={e => { e.stopPropagation(); onDelete(tag.id) }} className="ml-0.5 opacity-60 hover:opacity-100">×</span>
-      )}
     </button>
+  )
+}
+
+function TagDots({ todo, tags }) {
+  const todoTags = tags.filter(t => (todo.tag_ids || []).includes(t.id))
+  if (todoTags.length === 0) return null
+  return (
+    <span className="flex gap-1 flex-shrink-0 items-center">
+      {todoTags.map(tag => (
+        <span
+          key={tag.id}
+          title={tag.name}
+          className={`w-[7px] h-[7px] rounded-full ${TAG_COLORS[tag.color_index % TAG_COLORS.length].dot}`}
+        />
+      ))}
+    </span>
   )
 }
 
@@ -70,40 +81,42 @@ function TagSelector({ tags, selectedIds, onToggle, onCreateTag }) {
   }
 
   return (
-    <div>
-      <p className="text-xs text-gray-400 mb-2 px-1">태그</p>
-      <div className="flex flex-wrap gap-1.5">
-        {tags.map(tag => (
-          <TagChip
-            key={tag.id}
-            tag={tag}
-            selected={selectedIds.includes(tag.id)}
-            onClick={() => onToggle(tag.id)}
-          />
-        ))}
-        {adding ? (
-          <div className="flex items-center gap-1">
-            <input
-              autoFocus
-              type="text"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setAdding(false) }}
-              placeholder="태그명"
-              className="w-20 bg-gray-50 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-300"
-            />
-            <button onClick={handleCreate} className="text-xs text-emerald-500 font-medium">추가</button>
-            <button onClick={() => setAdding(false)} className="text-xs text-gray-400">취소</button>
-          </div>
-        ) : (
+    <div className="flex flex-wrap gap-1.5 items-center">
+      {tags.map(tag => {
+        const color = TAG_COLORS[tag.color_index % TAG_COLORS.length]
+        const selected = selectedIds.includes(tag.id)
+        return (
           <button
-            onClick={() => setAdding(true)}
-            className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-400 hover:bg-gray-200 transition-all"
+            key={tag.id}
+            onClick={() => onToggle(tag.id)}
+            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-all
+              ${selected ? `${color.bg} ${color.text}` : 'bg-white border border-gray-200 text-gray-400'}`}
           >
-            + 새 태그
+            {tag.name}
           </button>
-        )}
-      </div>
+        )
+      })}
+      {adding ? (
+        <span className="flex items-center gap-1">
+          <input
+            autoFocus
+            type="text"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleCreate(); if (e.key === 'Escape') setAdding(false) }}
+            placeholder="태그명"
+            className="w-20 bg-white border border-gray-200 rounded-full px-2.5 py-1 text-xs focus:outline-none focus:border-emerald-300"
+          />
+          <button onClick={handleCreate} className="text-xs text-emerald-500 font-medium">추가</button>
+        </span>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="px-2 py-1 rounded-full text-xs text-gray-300 hover:text-gray-400 transition-all"
+        >
+          + 태그
+        </button>
+      )}
     </div>
   )
 }
@@ -112,8 +125,8 @@ export default function TodoTab({ userId }) {
   const [todos, setTodos] = useState([])
   const [tags, setTags] = useState([])
   const [filterTag, setFilterTag] = useState(null)
-  const [showAdd, setShowAdd] = useState(false)
-  const [newTodo, setNewTodo] = useState({ name: '', deadline: '', when: '', emoji: '📌', tag_ids: [] })
+  const [showOverdue, setShowOverdue] = useState(false)
+  const [showLater, setShowLater] = useState(false)
   const [loading, setLoading] = useState(true)
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -165,18 +178,15 @@ export default function TodoTab({ userId }) {
     return id
   }
 
-  const addTodo = async () => {
-    if (!newTodo.name.trim()) return
+  const addTodo = async ({ name, when, deadline, tag_ids }) => {
     const id = Date.now()
     const todo = {
-      id, user_id: userId, name: newTodo.name.trim(), emoji: newTodo.emoji || '📌',
-      done: false, done_at: null, when: newTodo.when || null, deadline: newTodo.deadline || null,
+      id, user_id: userId, name, emoji: '📌',
+      done: false, done_at: null, when: when || null, deadline: deadline || null,
       order_index: todos.length,
-      tag_ids: newTodo.tag_ids,
+      tag_ids,
     }
     setTodos(prev => [...prev, todo])
-    setNewTodo({ name: '', deadline: '', when: '', emoji: '📌', tag_ids: [] })
-    setShowAdd(false)
 
     const { error } = await supabase.from('todos').insert({
       id: todo.id, user_id: userId, name: todo.name, emoji: todo.emoji,
@@ -188,8 +198,8 @@ export default function TodoTab({ userId }) {
       .update({ order_index: todo.order_index })
       .eq('id', id).eq('user_id', userId)
 
-    if (todo.tag_ids.length > 0) {
-      const links = todo.tag_ids.map(tagId => ({ todo_id: id, tag_id: tagId, user_id: userId }))
+    if (tag_ids.length > 0) {
+      const links = tag_ids.map(tagId => ({ todo_id: id, tag_id: tagId, user_id: userId }))
       const { error: le } = await supabase.from('todo_tag_links').insert(links)
       if (le) console.error('addTodo tag links error:', le)
     }
@@ -270,12 +280,7 @@ export default function TodoTab({ userId }) {
   }
 
   const now = new Date()
-  const todayKey = toDateKey(now)
-  const tomorrowKey = toDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))
-  const daysUntilSunday = (7 - now.getDay()) % 7
-  const currentWeekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilSunday)
-  const currentWeekEndKey = toDateKey(currentWeekEnd)
-  const nextWeekEndKey = toDateKey(new Date(currentWeekEnd.getFullYear(), currentWeekEnd.getMonth(), currentWeekEnd.getDate() + 7))
+  const todayKey = getTodayKey()
   const byOrder = (a, b) => getTodoOrder(a) - getTodoOrder(b) || (a.created_at || '').localeCompare(b.created_at || '')
 
   // Only show pending todos in main list
@@ -283,156 +288,182 @@ export default function TodoTab({ userId }) {
   const done = todos.filter(t => t.done)
 
   const filtered = filterTag ? pending.filter(t => (t.tag_ids || []).includes(filterTag)) : pending
-  const pastTodos = filtered.filter(t => t.when && t.when < todayKey).sort(byOrder)
-  const thisWeekSections = Array.from({ length: daysUntilSunday + 1 }, (_, offset) => {
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset)
-    const dateKey = toDateKey(date)
-    const suffix = dateKey === todayKey ? ' (오늘)' : dateKey === tomorrowKey ? ' (내일)' : ''
-    return {
-      label: `${WEEKDAY_LABELS[date.getDay()]}${suffix}`,
-      items: filtered.filter(t => t.when === dateKey).sort(byOrder),
-      color: dateKey === todayKey ? 'text-emerald-400' : dateKey === tomorrowKey ? 'text-blue-400' : 'text-violet-400',
-    }
-  })
-  const nextWeekTodos = filtered.filter(t => t.when > currentWeekEndKey && t.when <= nextWeekEndKey).sort(byOrder)
-  const laterTodos = filtered.filter(t => !t.when || t.when > nextWeekEndKey).sort(byOrder)
-  const todoSections = [
-    { label: '지난', items: pastTodos, color: 'text-red-400' },
-    ...thisWeekSections,
-    { label: '다음 주', items: nextWeekTodos, color: 'text-indigo-400' },
-    { label: '나중에', items: laterTodos, color: 'text-gray-400' },
-  ]
+  const overdue = filtered.filter(t => t.when && t.when < todayKey).sort(byOrder)
+  const todayTodos = filtered.filter(t => t.when === todayKey).sort(byOrder)
+  const upcoming = filtered.filter(t => t.when && t.when > todayKey)
+    .sort((a, b) => a.when.localeCompare(b.when) || byOrder(a, b))
+  const later = filtered.filter(t => !t.when).sort(byOrder)
+  const doneToday = done.filter(t => t.done_at === todayKey).length
+
+  const moveOverdueToToday = async () => {
+    const ids = overdue.map(t => t.id)
+    setTodos(prev => prev.map(t => ids.includes(t.id) ? { ...t, when: todayKey } : t))
+    const results = await Promise.all(ids.map(id =>
+      supabase.from('todos').update({ when: todayKey }).eq('id', id).eq('user_id', userId)
+    ))
+    results.forEach(({ error }) => {
+      if (error) console.error('moveOverdueToToday error:', error)
+    })
+  }
+
+  const rowProps = { tags, onToggle: toggleDone, onDelete: deleteTodo, onUpdate: updateTodo, onCreateTag: createTag }
 
   return (
     <div className="pt-4 pb-8">
-      {/* 태그 필터 바 */}
-      {tags.length > 0 && (
-        <div className="px-4 mb-4 flex gap-2 flex-wrap">
-          <button
-            onClick={() => setFilterTag(null)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-              filterTag === null ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-400'
-            }`}
-          >
-            전체
-          </button>
-          {tags.map(tag => (
-            <TagChip
-              key={tag.id}
-              tag={tag}
-              selected={filterTag === tag.id}
-              onClick={() => setFilterTag(filterTag === tag.id ? null : tag.id)}
-            />
-          ))}
-        </div>
-      )}
-
-      {filtered.length === 0 && !showAdd && done.length === 0 && (
-        <div className="text-center py-16 text-gray-300">
-          <p className="text-5xl mb-4">✅</p>
-          <p className="text-sm font-medium">
-            {filterTag ? '이 태그의 할 일이 없어요!' : '할 일을 추가해봐요!'}
-          </p>
-        </div>
-      )}
-
-      {todoSections.map(({ label, items, color }) => items.length > 0 && (
-        <div key={label} className="px-4 mb-5">
-          <p className={`text-xs font-semibold mb-2 px-1 flex items-center gap-1.5 ${color}`}>
-            {label}
-            <span className="text-[10px] font-bold bg-white rounded-full px-1.5 py-px border border-gray-100 text-gray-400">{items.length}</span>
-          </p>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={({ active, over }) => reorderTodos(active.id, over?.id, items)}
-          >
-            <SortableContext items={items.map(todo => todo.id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-2">
-                {items.map(todo => (
-                  <TodoItem
-                    key={todo.id}
-                    todo={todo}
-                    tags={tags}
-                    onToggle={toggleDone}
-                    onDelete={deleteTodo}
-                    onUpdate={updateTodo}
-                    onCreateTag={createTag}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        </div>
-      ))}
-
-      <div className="px-4 mt-2">
-        {showAdd ? (
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50">
-            <div className="flex gap-2 mb-3">
-              <input
-                type="text"
-                placeholder="할 일"
-                value={newTodo.name}
-                onChange={e => setNewTodo({ ...newTodo, name: e.target.value })}
-                className="flex-1 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                autoFocus
-              />
-              <input
-                type="text"
-                placeholder="📌"
-                value={newTodo.emoji}
-                onChange={e => setNewTodo({ ...newTodo, emoji: e.target.value })}
-                className="w-14 bg-gray-50 rounded-xl px-2 py-2.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-300"
-              />
+      <div className="px-4">
+        <div className="bg-white rounded-2xl border border-gray-100 px-5 py-5">
+          {/* 태그 필터 */}
+          {tags.length > 0 && (
+            <div className="flex gap-1 flex-wrap mb-4 -ml-1">
+              <button
+                onClick={() => setFilterTag(null)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+                  filterTag === null ? 'bg-gray-800 text-white' : 'bg-transparent text-gray-400 hover:text-gray-500'
+                }`}
+              >
+                전체
+              </button>
+              {tags.map(tag => (
+                <TagChip
+                  key={tag.id}
+                  tag={tag}
+                  selected={filterTag === tag.id}
+                  onClick={() => setFilterTag(filterTag === tag.id ? null : tag.id)}
+                />
+              ))}
             </div>
-            <div className="space-y-3 mb-3">
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <p className="text-xs text-gray-400 mb-1 px-1">할 날짜</p>
-                  <input
-                    type="date"
-                    value={newTodo.when}
-                    onChange={e => setNewTodo({ ...newTodo, when: e.target.value })}
-                    className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs text-gray-400 mb-1 px-1">기한</p>
-                  <input
-                    type="date"
-                    value={newTodo.deadline}
-                    onChange={e => setNewTodo({ ...newTodo, deadline: e.target.value })}
-                    className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                  />
-                </div>
-              </div>
-              <TagSelector
-                tags={tags}
-                selectedIds={newTodo.tag_ids}
-                onToggle={id => setNewTodo(prev => ({
-                  ...prev,
-                  tag_ids: prev.tag_ids.includes(id) ? prev.tag_ids.filter(t => t !== id) : [...prev.tag_ids, id]
-                }))}
-                onCreateTag={async (name) => {
-                  const id = await createTag(name)
-                  setNewTodo(prev => ({ ...prev, tag_ids: [...prev.tag_ids, id] }))
-                }}
-              />
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setShowAdd(false)} className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 bg-gray-50">취소</button>
-              <button onClick={addTodo} className="flex-1 py-2.5 rounded-xl text-sm text-white bg-emerald-400 font-medium">추가</button>
-            </div>
+          )}
+
+          {/* 오늘 헤더 */}
+          <div className="flex items-baseline justify-between">
+            <h3 className="text-xl font-bold text-gray-800">오늘</h3>
+            <span className="text-xs text-gray-400">
+              {now.getMonth() + 1}월 {now.getDate()}일 {WEEKDAY_LABELS[now.getDay()]}
+            </span>
           </div>
-        ) : (
-          <button
-            onClick={() => setShowAdd(true)}
-            className="w-full py-3.5 rounded-2xl text-sm text-emerald-500 border-2 border-dashed border-emerald-200 font-medium bg-emerald-50/50"
-          >
-            + 할 일 추가
-          </button>
-        )}
+          <p className="text-xs text-gray-400 mt-1 mb-3">
+            {doneToday > 0 && `${doneToday}개 완료 · `}
+            {todayTodos.length > 0 ? `${todayTodos.length}개 남음` : '남은 할 일 없음'}
+          </p>
+
+          {/* 지난 할 일 배너 */}
+          {overdue.length > 0 && (
+            <div className="mb-3">
+              <div className="flex items-center gap-2 bg-red-50 rounded-xl px-3 py-2.5">
+                <button
+                  onClick={() => setShowOverdue(v => !v)}
+                  className="flex items-center gap-1.5 flex-1 text-left"
+                >
+                  <svg
+                    className={`w-3.5 h-3.5 text-red-300 transition-transform ${showOverdue ? 'rotate-90' : ''}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  <span className="text-xs font-medium text-red-500">지난 할 일 {overdue.length}개</span>
+                </button>
+                <button
+                  onClick={moveOverdueToToday}
+                  className="text-xs font-semibold text-red-500 hover:text-red-600 transition-colors"
+                >
+                  오늘로 옮기기
+                </button>
+              </div>
+              {showOverdue && (
+                <div className="mt-1 px-1">
+                  {overdue.map(todo => (
+                    <TodoRow
+                      key={todo.id}
+                      todo={todo}
+                      dateLabel={formatRelativeDate(todo.when, todayKey)}
+                      dateLabelClass="text-red-300"
+                      {...rowProps}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 오늘 */}
+          {todayTodos.length === 0 ? (
+            overdue.length === 0 && upcoming.length === 0 && later.length === 0 ? (
+              <div className="text-center py-10 text-gray-300">
+                <p className="text-4xl mb-3">🌿</p>
+                <p className="text-sm font-medium">
+                  {filterTag ? '이 태그의 할 일이 없어요' : '아래에서 첫 할 일을 추가해봐요'}
+                </p>
+              </div>
+            ) : (
+              <p className="py-3 text-xs text-gray-300">오늘 할 일이 없어요</p>
+            )
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={({ active, over }) => reorderTodos(active.id, over?.id, todayTodos)}
+            >
+              <SortableContext items={todayTodos.map(todo => todo.id)} strategy={verticalListSortingStrategy}>
+                <div>
+                  {todayTodos.map(todo => (
+                    <TodoRow key={todo.id} todo={todo} draggable {...rowProps} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
+
+          {/* 예정 */}
+          {upcoming.length > 0 && (
+            <div className="mt-5">
+              <p className="text-[11px] font-semibold text-gray-300 tracking-wider mb-0.5">예정</p>
+              {upcoming.map(todo => (
+                <TodoRow
+                  key={todo.id}
+                  todo={todo}
+                  dateLabel={formatUpcomingLabel(todo.when, todayKey)}
+                  {...rowProps}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* 나중에 */}
+          {later.length > 0 && (
+            <div className="mt-4">
+              <button
+                onClick={() => setShowLater(v => !v)}
+                className="flex items-center gap-1.5 py-1 text-gray-400"
+              >
+                <svg
+                  className={`w-3.5 h-3.5 text-gray-300 transition-transform ${showLater ? 'rotate-90' : ''}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="text-[11px] font-semibold tracking-wider">나중에</span>
+                <span className="text-[11px] text-gray-300">{later.length}</span>
+              </button>
+              {showLater && (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={({ active, over }) => reorderTodos(active.id, over?.id, later)}
+                >
+                  <SortableContext items={later.map(todo => todo.id)} strategy={verticalListSortingStrategy}>
+                    <div>
+                      {later.map(todo => (
+                        <TodoRow key={todo.id} todo={todo} draggable {...rowProps} />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              )}
+            </div>
+          )}
+
+          <QuickAdd tags={tags} todayKey={todayKey} onAdd={addTodo} onCreateTag={createTag} />
+        </div>
       </div>
 
       {/* 완료 아카이브 */}
@@ -441,13 +472,104 @@ export default function TodoTab({ userId }) {
   )
 }
 
-function TodoItem({ todo, tags, onToggle, onDelete, onUpdate, onCreateTag }) {
+function QuickAdd({ tags, todayKey, onAdd, onCreateTag }) {
+  const [name, setName] = useState('')
+  const [dateMode, setDateMode] = useState('today')
+  const [customDate, setCustomDate] = useState('')
+  const [showDeadline, setShowDeadline] = useState(false)
+  const [deadline, setDeadline] = useState('')
+  const [tagIds, setTagIds] = useState([])
+
+  const when = dateMode === 'today' ? todayKey
+    : dateMode === 'tomorrow' ? getNextDateKey(todayKey)
+    : dateMode === 'date' ? (customDate || null)
+    : null
+
+  const submit = () => {
+    if (!name.trim()) return
+    onAdd({ name: name.trim(), when, deadline: showDeadline ? deadline : '', tag_ids: tagIds })
+    setName('')
+  }
+
+  const dateChips = [
+    { key: 'today', label: '오늘' },
+    { key: 'tomorrow', label: '내일' },
+    { key: 'date', label: '날짜' },
+    { key: 'later', label: '나중에' },
+  ]
+
+  return (
+    <div className="mt-4 bg-gray-50 rounded-2xl px-3.5 py-3">
+      <div className="flex items-center gap-2">
+        <svg className="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit() }}
+          placeholder="할 일 입력 후 Enter"
+          className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-gray-300"
+        />
+      </div>
+      <div className="flex flex-wrap gap-1.5 mt-2.5 items-center">
+        {dateChips.map(chip => (
+          <button
+            key={chip.key}
+            onClick={() => setDateMode(chip.key)}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+              dateMode === chip.key
+                ? 'bg-emerald-100 text-emerald-600'
+                : 'bg-white border border-gray-200 text-gray-400'
+            }`}
+          >
+            {chip.label}
+          </button>
+        ))}
+        {dateMode === 'date' && (
+          <input
+            type="date"
+            value={customDate}
+            onChange={e => setCustomDate(e.target.value)}
+            className="bg-white border border-gray-200 rounded-full px-2.5 py-0.5 text-xs text-gray-500 focus:outline-none focus:border-emerald-300"
+          />
+        )}
+        <span className="w-px h-4 bg-gray-200 mx-0.5" />
+        <button
+          onClick={() => setShowDeadline(v => !v)}
+          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+            showDeadline ? 'bg-amber-100 text-amber-600' : 'bg-white border border-gray-200 text-gray-400'
+          }`}
+        >
+          기한
+        </button>
+        {showDeadline && (
+          <input
+            type="date"
+            value={deadline}
+            onChange={e => setDeadline(e.target.value)}
+            className="bg-white border border-gray-200 rounded-full px-2.5 py-0.5 text-xs text-gray-500 focus:outline-none focus:border-amber-300"
+          />
+        )}
+        <span className="w-px h-4 bg-gray-200 mx-0.5" />
+        <TagSelector
+          tags={tags}
+          selectedIds={tagIds}
+          onToggle={id => setTagIds(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])}
+          onCreateTag={async (tagName) => {
+            const id = await onCreateTag(tagName)
+            setTagIds(prev => [...prev, id])
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function TodoRow({ todo, tags, onToggle, onDelete, onUpdate, onCreateTag, draggable = false, dateLabel = null, dateLabelClass = 'text-gray-400' }) {
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState({
-    name: todo.name, emoji: todo.emoji,
-    when: todo.when || '', deadline: todo.deadline || '',
-    tag_ids: todo.tag_ids || []
-  })
+  const [checking, setChecking] = useState(false)
   const {
     attributes,
     listeners,
@@ -455,79 +577,27 @@ function TodoItem({ todo, tags, onToggle, onDelete, onUpdate, onCreateTag }) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: todo.id, disabled: editing })
+  } = useSortable({ id: todo.id, disabled: !draggable || editing })
   const today = getTodayKey()
-  const isOverdue = todo.deadline && !todo.done && todo.deadline < today
-
-  const saveEdit = () => {
-    if (draft.name.trim()) onUpdate(todo.id, {
-      name: draft.name.trim(), emoji: draft.emoji,
-      when: draft.when || null, deadline: draft.deadline || null,
-      tag_ids: draft.tag_ids,
-    })
-    setEditing(false)
-  }
-
-  const todoTags = tags.filter(t => (todo.tag_ids || []).includes(t.id))
 
   if (editing) {
     return (
-      <div className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-100">
-        <div className="flex gap-2 mb-3">
-          <input
-            type="text"
-            value={draft.name}
-            onChange={e => setDraft({ ...draft, name: e.target.value })}
-            className="flex-1 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-            autoFocus
-          />
-          <input
-            type="text"
-            value={draft.emoji}
-            onChange={e => setDraft({ ...draft, emoji: e.target.value })}
-            className="w-14 bg-gray-50 rounded-xl px-2 py-2.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-300"
-          />
-        </div>
-        <div className="space-y-3 mb-3">
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <p className="text-xs text-gray-400 mb-1 px-1">할 날짜</p>
-              <input
-                type="date"
-                value={draft.when}
-                onChange={e => setDraft({ ...draft, when: e.target.value })}
-                className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-              />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs text-gray-400 mb-1 px-1">기한</p>
-              <input
-                type="date"
-                value={draft.deadline}
-                onChange={e => setDraft({ ...draft, deadline: e.target.value })}
-                className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-              />
-            </div>
-          </div>
-          <TagSelector
-            tags={tags}
-            selectedIds={draft.tag_ids}
-            onToggle={id => setDraft(prev => ({
-              ...prev,
-              tag_ids: prev.tag_ids.includes(id) ? prev.tag_ids.filter(t => t !== id) : [...prev.tag_ids, id]
-            }))}
-            onCreateTag={async (name) => {
-              const id = await onCreateTag(name)
-              setDraft(prev => ({ ...prev, tag_ids: [...prev.tag_ids, id] }))
-            }}
-          />
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setEditing(false)} className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 bg-gray-50">취소</button>
-          <button onClick={saveEdit} className="flex-1 py-2.5 rounded-xl text-sm text-white bg-emerald-400 font-medium">저장</button>
-        </div>
-      </div>
+      <TodoEditForm
+        todo={todo}
+        tags={tags}
+        onCreateTag={onCreateTag}
+        onDelete={onDelete}
+        onSave={changes => { onUpdate(todo.id, changes); setEditing(false) }}
+        onCancel={() => setEditing(false)}
+      />
     )
+  }
+
+  const handleCheck = () => {
+    if (checking) return
+    setChecking(true)
+    // 체크 애니메이션을 보여준 뒤 목록에서 제거
+    setTimeout(() => onToggle(todo.id), 350)
   }
 
   return (
@@ -537,54 +607,132 @@ function TodoItem({ todo, tags, onToggle, onDelete, onUpdate, onCreateTag }) {
         transform: CSS.Transform.toString(transform),
         transition,
       }}
-      className={`bg-white rounded-2xl px-3 py-3.5 shadow-sm border flex items-center gap-2 transition-shadow ${
-        isDragging ? 'border-emerald-200 shadow-lg z-10 opacity-95' : 'border-gray-50'
+      className={`group flex items-center gap-2.5 py-3 border-b border-gray-100 ${
+        isDragging ? 'bg-white rounded-xl shadow-lg z-10 border-transparent px-2' : ''
       }`}
     >
+      {draggable && (
+        <button
+          type="button"
+          className="touch-none cursor-grab active:cursor-grabbing text-gray-200 hover:text-gray-400 transition-colors -ml-1.5 flex-shrink-0"
+          aria-label="할 일 순서 변경"
+          {...attributes}
+          {...listeners}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h.01M8 12h.01M8 17h.01M16 7h.01M16 12h.01M16 17h.01" />
+          </svg>
+        </button>
+      )}
       <button
-        type="button"
-        className="touch-none cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors p-1"
-        aria-label="할 일 순서 변경"
-        {...attributes}
-        {...listeners}
+        onClick={handleCheck}
+        aria-label="완료"
+        className={`w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+          checking
+            ? 'bg-emerald-400 border-emerald-400 check-pop'
+            : 'border-gray-200 hover:border-emerald-400'
+        }`}
       >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h.01M8 12h.01M8 17h.01M16 7h.01M16 12h.01M16 17h.01" />
-        </svg>
-      </button>
-      <button
-        onClick={() => onToggle(todo.id)}
-        className="w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all border-gray-200"
-      >
+        {checking && (
+          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+          </svg>
+        )}
       </button>
 
-      <span className="text-lg">{todo.emoji}</span>
+      <button onClick={() => setEditing(true)} className="flex-1 min-w-0 text-left">
+        <p className={`text-sm transition-colors ${checking ? 'text-gray-300 line-through' : 'text-gray-700'}`}>
+          {todo.name}
+        </p>
+      </button>
 
-      <div className="flex-1 min-w-0" onClick={() => setEditing(true)}>
-        <p className="text-sm font-medium text-gray-800">{todo.name}</p>
-        <div className="flex gap-2 mt-0.5 flex-wrap items-center">
-          {todo.when && <span className="text-xs text-blue-400">📅 {formatRelativeDate(todo.when, today)}</span>}
-          {todo.deadline && (() => {
-            const dday = formatDday(todo.deadline, today)
-            return (
-              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-md ${
-                dday.urgent ? 'bg-red-50 text-red-400' : 'bg-gray-50 text-gray-400'
-              }`}>
-                {isOverdue ? '⚠️ ' : '⏰ '}{dday.label}
-              </span>
-            )
-          })()}
-          {todoTags.map(tag => (
-            <TagChip key={tag.id} tag={tag} selected={false} onClick={() => {}} />
-          ))}
+      {dateLabel && <span className={`text-[11px] flex-shrink-0 ${dateLabelClass}`}>{dateLabel}</span>}
+      {todo.deadline && (() => {
+        const dday = formatDday(todo.deadline, today)
+        return (
+          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+            dday.urgent ? 'bg-red-50 text-red-400' : 'bg-gray-50 text-gray-400'
+          }`}>
+            {dday.label}
+          </span>
+        )
+      })()}
+      <TagDots todo={todo} tags={tags} />
+    </div>
+  )
+}
+
+function TodoEditForm({ todo, tags, onSave, onCancel, onDelete, onCreateTag }) {
+  const [draft, setDraft] = useState({
+    name: todo.name,
+    when: todo.when || '', deadline: todo.deadline || '',
+    tag_ids: todo.tag_ids || []
+  })
+
+  const save = () => {
+    if (!draft.name.trim()) return
+    onSave({
+      name: draft.name.trim(),
+      when: draft.when || null, deadline: draft.deadline || null,
+      tag_ids: draft.tag_ids,
+    })
+  }
+
+  return (
+    <div className="bg-gray-50 rounded-2xl p-4 my-2">
+      <input
+        type="text"
+        value={draft.name}
+        onChange={e => setDraft({ ...draft, name: e.target.value })}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) save(); if (e.key === 'Escape') onCancel() }}
+        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+        autoFocus
+      />
+      <div className="flex gap-2 mb-3">
+        <div className="flex-1">
+          <p className="text-xs text-gray-400 mb-1 px-1">할 날짜</p>
+          <input
+            type="date"
+            value={draft.when}
+            onChange={e => setDraft({ ...draft, when: e.target.value })}
+            className="w-full bg-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+          />
+        </div>
+        <div className="flex-1">
+          <p className="text-xs text-gray-400 mb-1 px-1">기한</p>
+          <input
+            type="date"
+            value={draft.deadline}
+            onChange={e => setDraft({ ...draft, deadline: e.target.value })}
+            className="w-full bg-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+          />
         </div>
       </div>
-
-      <button onClick={() => onDelete(todo.id)} className="text-gray-200 hover:text-red-300 transition-colors p-1">
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+      <div className="mb-3">
+        <p className="text-xs text-gray-400 mb-1.5 px-1">태그</p>
+        <TagSelector
+          tags={tags}
+          selectedIds={draft.tag_ids}
+          onToggle={id => setDraft(prev => ({
+            ...prev,
+            tag_ids: prev.tag_ids.includes(id) ? prev.tag_ids.filter(t => t !== id) : [...prev.tag_ids, id]
+          }))}
+          onCreateTag={async (name) => {
+            const id = await onCreateTag(name)
+            setDraft(prev => ({ ...prev, tag_ids: [...prev.tag_ids, id] }))
+          }}
+        />
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onDelete(todo.id)}
+          className="px-4 py-2.5 rounded-xl text-sm text-red-400 bg-white"
+        >
+          삭제
+        </button>
+        <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 bg-white">취소</button>
+        <button onClick={save} className="flex-1 py-2.5 rounded-xl text-sm text-white bg-emerald-400 font-medium">저장</button>
+      </div>
     </div>
   )
 }
