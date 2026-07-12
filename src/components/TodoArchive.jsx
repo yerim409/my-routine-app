@@ -2,24 +2,15 @@ import { useState } from 'react'
 import { formatRelativeDate } from '../lib/dates'
 
 const TAG_COLORS = [
-  { bg: 'bg-sky-100', text: 'text-sky-600' },
-  { bg: 'bg-violet-100', text: 'text-violet-600' },
-  { bg: 'bg-rose-100', text: 'text-rose-600' },
-  { bg: 'bg-amber-100', text: 'text-amber-600' },
-  { bg: 'bg-emerald-100', text: 'text-emerald-600' },
-  { bg: 'bg-orange-100', text: 'text-orange-600' },
-  { bg: 'bg-pink-100', text: 'text-pink-600' },
-  { bg: 'bg-blue-100', text: 'text-blue-600' },
+  { bg: 'bg-sky-100', text: 'text-sky-600', dot: 'bg-sky-400' },
+  { bg: 'bg-violet-100', text: 'text-violet-600', dot: 'bg-violet-400' },
+  { bg: 'bg-rose-100', text: 'text-rose-600', dot: 'bg-rose-400' },
+  { bg: 'bg-amber-100', text: 'text-amber-600', dot: 'bg-amber-400' },
+  { bg: 'bg-emerald-100', text: 'text-emerald-600', dot: 'bg-emerald-400' },
+  { bg: 'bg-orange-100', text: 'text-orange-600', dot: 'bg-orange-400' },
+  { bg: 'bg-pink-100', text: 'text-pink-600', dot: 'bg-pink-400' },
+  { bg: 'bg-blue-100', text: 'text-blue-600', dot: 'bg-blue-400' },
 ]
-
-function TagChip({ tag }) {
-  const color = TAG_COLORS[tag.color_index % TAG_COLORS.length]
-  return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color.bg} ${color.text}`}>
-      {tag.name}
-    </span>
-  )
-}
 
 function getArchiveDate(todo) {
   return todo.when || null
@@ -74,7 +65,6 @@ function CompletedTodoItem({ todo, tags, onUpdate, onCreateTag }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState({
     name: todo.name,
-    emoji: todo.emoji,
     when: todo.when || '',
     deadline: todo.deadline || '',
     tag_ids: todo.tag_ids || [],
@@ -84,7 +74,6 @@ function CompletedTodoItem({ todo, tags, onUpdate, onCreateTag }) {
   const saveEdit = () => {
     if (draft.name.trim()) onUpdate(todo.id, {
       name: draft.name.trim(),
-      emoji: draft.emoji,
       when: draft.when || null,
       deadline: draft.deadline || null,
       tag_ids: draft.tag_ids,
@@ -94,23 +83,19 @@ function CompletedTodoItem({ todo, tags, onUpdate, onCreateTag }) {
 
   if (editing) {
     return (
-      <div className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-100">
-        <div className="flex gap-2 mb-3">
-          <input type="text" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })}
-            className="flex-1 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" autoFocus />
-          <input type="text" value={draft.emoji} onChange={e => setDraft({ ...draft, emoji: e.target.value })}
-            className="w-14 bg-gray-50 rounded-xl px-2 py-2.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-300" />
-        </div>
+      <div className="bg-gray-50 rounded-2xl p-4 my-2">
+        <input type="text" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })}
+          className="w-full bg-white rounded-xl px-3 py-2.5 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-emerald-300" autoFocus />
         <div className="flex gap-2 mb-3">
           <div className="flex-1">
             <p className="text-xs text-gray-400 mb-1 px-1">할 날짜</p>
             <input type="date" value={draft.when} onChange={e => setDraft({ ...draft, when: e.target.value })}
-              className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+              className="w-full bg-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
           </div>
           <div className="flex-1">
             <p className="text-xs text-gray-400 mb-1 px-1">기한</p>
             <input type="date" value={draft.deadline} onChange={e => setDraft({ ...draft, deadline: e.target.value })}
-              className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+              className="w-full bg-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
           </div>
         </div>
         <div className="mb-3">
@@ -128,7 +113,7 @@ function CompletedTodoItem({ todo, tags, onUpdate, onCreateTag }) {
           />
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setEditing(false)} className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 bg-gray-50">취소</button>
+          <button onClick={() => setEditing(false)} className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 bg-white">취소</button>
           <button onClick={saveEdit} className="flex-1 py-2.5 rounded-xl text-sm text-white bg-emerald-400 font-medium">저장</button>
         </div>
       </div>
@@ -136,29 +121,24 @@ function CompletedTodoItem({ todo, tags, onUpdate, onCreateTag }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl px-4 py-3.5 shadow-sm border border-gray-50 flex items-center gap-3 opacity-60"
-      onClick={() => setEditing(true)}>
-      <div className="w-6 h-6 rounded-full bg-emerald-400 flex items-center justify-center flex-shrink-0">
-        <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div
+      className="flex items-center gap-2.5 py-2.5 border-b border-gray-50 last:border-b-0 cursor-pointer"
+      onClick={() => setEditing(true)}
+    >
+      <span className="w-[18px] h-[18px] rounded-full bg-emerald-300 flex items-center justify-center flex-shrink-0">
+        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
         </svg>
-      </div>
-      <span className="text-lg">{todo.emoji}</span>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-400 line-through">{todo.name}</p>
-        {(todo.when || todo.deadline) && (
-          <div className="flex gap-2 mt-0.5 flex-wrap items-center">
-            {/* 완료된 항목엔 D-day·경고색 없이 날짜만 담백하게 */}
-            {todo.when && <span className="text-xs text-blue-300">📅 {formatRelativeDate(todo.when)}</span>}
-            {todo.deadline && <span className="text-xs text-gray-300">⏰ {formatRelativeDate(todo.deadline)}</span>}
-          </div>
-        )}
-        {todoTags.length > 0 && (
-          <div className="flex gap-1 mt-0.5 flex-wrap">
-            {todoTags.map(tag => <TagChip key={tag.id} tag={tag} />)}
-          </div>
-        )}
-      </div>
+      </span>
+      <p className="flex-1 min-w-0 text-sm text-gray-400 line-through truncate">{todo.name}</p>
+      {todoTags.length > 0 && (
+        <span className="flex gap-1 flex-shrink-0 items-center">
+          {todoTags.map(tag => (
+            <span key={tag.id} title={tag.name}
+              className={`w-[7px] h-[7px] rounded-full ${TAG_COLORS[tag.color_index % TAG_COLORS.length].dot}`} />
+          ))}
+        </span>
+      )}
     </div>
   )
 }
@@ -178,7 +158,7 @@ function BottomSheet({ date, todos, tags, onUpdate, onCreateTag, onClose }) {
         {items.length === 0 ? (
           <p className="text-sm text-gray-300 text-center py-8">완료한 항목이 없어요</p>
         ) : (
-          <div className="space-y-2">
+          <div>
             {items.map(todo => (
               <CompletedTodoItem key={todo.id} todo={todo} tags={tags} onUpdate={onUpdate} onCreateTag={onCreateTag} />
             ))}
@@ -281,41 +261,20 @@ function ArchiveCalendar({ doneTodos, tags, onUpdate, onCreateTag }) {
   )
 }
 
-function TagSection({ tag, todos, tags, onUpdate, onCreateTag }) {
-  const [open, setOpen] = useState(false)
-  const items = tag === null
-    ? todos.filter(t => !t.tag_ids || t.tag_ids.length === 0)
-    : todos.filter(t => (t.tag_ids || []).includes(tag.id))
-
-  if (items.length === 0) return null
-
-  const label = tag ? tag.name : '태그 없음'
-  const color = tag ? TAG_COLORS[tag.color_index % TAG_COLORS.length] : { bg: 'bg-gray-100', text: 'text-gray-400' }
-
-  return (
-    <div className="mx-4">
-      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between py-2.5 px-1">
-        <div className="flex items-center gap-2">
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text}`}>{label}</span>
-          <span className="text-xs text-gray-400">{items.length}개</span>
-        </div>
-        <svg className={`w-4 h-4 text-gray-300 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      {open && (
-        <div className="space-y-2 pb-2">
-          {items.map(todo => (
-            <CompletedTodoItem key={todo.id} todo={todo} tags={tags} onUpdate={onUpdate} onCreateTag={onCreateTag} />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function TodoArchive({ doneTodos, tags, onUpdate, onCreateTag }) {
+  const [showAll, setShowAll] = useState(false)
+
   if (doneTodos.length === 0) return null
+
+  // 로그북: 완료 항목을 할 날짜(when) 기준 최근순 그룹으로 — 날짜 없는 항목은 맨 뒤
+  const groups = {}
+  for (const todo of doneTodos) {
+    const dateKey = getArchiveDate(todo) || ''
+    if (!groups[dateKey]) groups[dateKey] = []
+    groups[dateKey].push(todo)
+  }
+  const dateKeys = Object.keys(groups).sort((a, b) => b.localeCompare(a))
+  const visibleKeys = showAll ? dateKeys : dateKeys.slice(0, 3)
 
   return (
     <div className="mt-6">
@@ -325,11 +284,25 @@ export default function TodoArchive({ doneTodos, tags, onUpdate, onCreateTag }) 
 
       <ArchiveCalendar doneTodos={doneTodos} tags={tags} onUpdate={onUpdate} onCreateTag={onCreateTag} />
 
-      <div className="mt-4 space-y-1">
-        {tags.map(tag => (
-          <TagSection key={tag.id} tag={tag} todos={doneTodos} tags={tags} onUpdate={onUpdate} onCreateTag={onCreateTag} />
+      <div className="mx-4 mt-4 bg-white rounded-2xl border border-gray-100 px-5 py-2">
+        {visibleKeys.map(dateKey => (
+          <div key={dateKey || 'undated'}>
+            <p className="text-[11px] font-semibold text-gray-300 tracking-wider pt-3">
+              {dateKey ? formatRelativeDate(dateKey) : '날짜 없음'}
+            </p>
+            {groups[dateKey].map(todo => (
+              <CompletedTodoItem key={todo.id} todo={todo} tags={tags} onUpdate={onUpdate} onCreateTag={onCreateTag} />
+            ))}
+          </div>
         ))}
-        <TagSection tag={null} todos={doneTodos} tags={tags} onUpdate={onUpdate} onCreateTag={onCreateTag} />
+        {!showAll && dateKeys.length > 3 && (
+          <button
+            onClick={() => setShowAll(true)}
+            className="w-full py-3 text-xs text-gray-400 font-medium hover:text-gray-500 transition-colors"
+          >
+            전체 보기 ({dateKeys.length}일)
+          </button>
+        )}
       </div>
     </div>
   )

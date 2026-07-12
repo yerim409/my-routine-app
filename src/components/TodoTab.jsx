@@ -121,7 +121,7 @@ function TagSelector({ tags, selectedIds, onToggle, onCreateTag }) {
   )
 }
 
-export default function TodoTab({ userId }) {
+export default function TodoTab({ userId, onSummary }) {
   const [todos, setTodos] = useState([])
   const [tags, setTags] = useState([])
   const [filterTag, setFilterTag] = useState(null)
@@ -168,6 +168,16 @@ export default function TodoTab({ userId }) {
     load()
     return () => { cancelled = true }
   }, [userId])
+
+  // 헤더 인사말용 현황 보고 — 오늘까지(지난 포함) 남은 할 일, 오늘 완료 (태그 필터 무시)
+  useEffect(() => {
+    if (loading) return
+    const tk = getTodayKey()
+    onSummary?.({
+      remaining: todos.filter(t => !t.done && t.when && t.when <= tk).length,
+      doneToday: todos.filter(t => t.done && t.done_at === tk).length,
+    })
+  }, [todos, loading, onSummary])
 
   const createTag = async (name) => {
     const id = Date.now()

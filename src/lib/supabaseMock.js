@@ -21,6 +21,7 @@ function seedData() {
   const d3 = getPrevDateKey(d2)
   const weekKey = getWeekKey(today)
   const prevWeek = getWeekDateKeys(getPrevWeekKey(weekKey))
+  const weekBefore = getWeekDateKeys(getPrevWeekKey(getPrevWeekKey(weekKey)))
   const thisWeekSoFar = getWeekDateKeys(weekKey).filter(d => d <= today)
 
   // 통계(히트맵/최장 스트릭)용 과거 이력: 지지난주부터 10주 전까지.
@@ -67,6 +68,9 @@ function seedData() {
       { id: 106, user_id: uid, name: '모의고사 오답 정리', emoji: '📌', done: false, done_at: null, when: getNextDateKey(today), deadline: null, order_index: 5, created_at: '2026-07-06T09:00:00Z' },
       { id: 107, user_id: uid, name: '멘토링 자료 준비', emoji: '📌', done: false, done_at: null, when: getNextDateKey(getNextDateKey(getNextDateKey(today))), deadline: getNextDateKey(getNextDateKey(getNextDateKey(today))), order_index: 6, created_at: '2026-07-07T09:00:00Z' },
       { id: 108, user_id: uid, name: '독서: 제로 투 원', emoji: '📌', done: false, done_at: null, when: null, deadline: null, order_index: 7, created_at: '2026-07-08T09:00:00Z' },
+      // 아카이브 로그북 검증용 완료 항목 — 이번 주/지난주 통계(주간 비교)에 안 잡히게 지지난주로
+      { id: 109, user_id: uid, name: '재무 스터디 발제', emoji: '📌', done: true, done_at: weekBefore[0], when: weekBefore[0], deadline: null, order_index: 8, created_at: '2026-06-20T09:00:00Z' },
+      { id: 110, user_id: uid, name: '건강검진 예약', emoji: '📌', done: true, done_at: weekBefore[2], when: null, deadline: null, order_index: 9, created_at: '2026-06-21T09:00:00Z' },
     ],
     todo_tags: [
       { id: 201, user_id: uid, name: '공부', color_index: 0 },

@@ -169,7 +169,7 @@ function SortableRoutineItem({ routine, checks, allChecks, dateKey, editMode, on
   )
 }
 
-export default function RoutineTab({ selectedDate, userId }) {
+export default function RoutineTab({ selectedDate, userId, onSummary }) {
   const dateKey = selectedDate || getTodayKey()
 
   const [routines, setRoutines] = useState([])
@@ -285,6 +285,12 @@ export default function RoutineTab({ selectedDate, userId }) {
   const weeklyCheckedToday = routines.filter(r => r.weekly_target && checks[r.id]).length
   const total = dailyTotal + weeklyCheckedToday
   const percent = total === 0 ? 0 : Math.round((doneCount / total) * 100)
+
+  // 헤더 인사말용 현황 보고 (달성률 카드와 같은 기준)
+  useEffect(() => {
+    if (loading) return
+    onSummary?.({ total, done: doneCount })
+  }, [loading, total, doneCount, onSummary])
 
   if (loading) {
     return (
