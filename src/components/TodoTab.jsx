@@ -293,17 +293,21 @@ export default function TodoTab({ userId, onSummary }) {
   const todayKey = getTodayKey()
   const byOrder = (a, b) => getTodoOrder(a) - getTodoOrder(b) || (a.created_at || '').localeCompare(b.created_at || '')
 
-  // Only show pending todos in main list
   const pending = todos.filter(t => !t.done)
   const done = todos.filter(t => t.done)
+  // 오늘 완료한 항목은 하루 동안 오늘 목록에 체크된 채로 남고, 아카이브에는 다음 날부터 보인다
+  const doneTodayTodos = done.filter(t => t.done_at === todayKey)
+  const archived = done.filter(t => t.done_at !== todayKey)
 
-  const filtered = filterTag ? pending.filter(t => (t.tag_ids || []).includes(filterTag)) : pending
+  const byTag = list => filterTag ? list.filter(t => (t.tag_ids || []).includes(filterTag)) : list
+  const filtered = byTag(pending)
   const overdue = filtered.filter(t => t.when && t.when < todayKey).sort(byOrder)
   const todayTodos = filtered.filter(t => t.when === todayKey).sort(byOrder)
+  const todayList = [...todayTodos, ...byTag(doneTodayTodos)].sort(byOrder)
   const upcoming = filtered.filter(t => t.when && t.when > todayKey)
     .sort((a, b) => a.when.localeCompare(b.when) || byOrder(a, b))
   const later = filtered.filter(t => !t.when).sort(byOrder)
-  const doneToday = done.filter(t => t.done_at === todayKey).length
+  const doneToday = doneTodayTodos.length
 
   const moveOverdueToToday = async () => {
     const ids = overdue.map(t => t.id)
@@ -396,7 +400,7 @@ export default function TodoTab({ userId, onSummary }) {
           )}
 
           {/* 오늘 */}
-          {todayTodos.length === 0 ? (
+          {todayList.length === 0 ? (
             overdue.length === 0 && upcoming.length === 0 && later.length === 0 ? (
               <div className="text-center py-10 text-gray-300">
                 <p className="text-4xl mb-3">🌿</p>
@@ -411,11 +415,11 @@ export default function TodoTab({ userId, onSummary }) {
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
-              onDragEnd={({ active, over }) => reorderTodos(active.id, over?.id, todayTodos)}
+              onDragEnd={({ active, over }) => reorderTodos(active.id, over?.id, todayList)}
             >
-              <SortableContext items={todayTodos.map(todo => todo.id)} strategy={verticalListSortingStrategy}>
+              <SortableContext items={todayList.map(todo => todo.id)} strategy={verticalListSortingStrategy}>
                 <div>
-                  {todayTodos.map(todo => (
+                  {todayList.map(todo => (
                     <TodoRow key={todo.id} todo={todo} draggable {...rowProps} />
                   ))}
                 </div>
@@ -476,8 +480,8 @@ export default function TodoTab({ userId, onSummary }) {
         </div>
       </div>
 
-      {/* 완료 아카이브 */}
-      <TodoArchive doneTodos={done} tags={tags} onUpdate={updateTodo} onCreateTag={createTag} />
+      {/* 완료 아카이브 — 오늘 완료한 항목은 위 오늘 목록에 있으므로 제외 */}
+      <TodoArchive doneTodos={archived} tags={tags} onUpdate={updateTodo} onCreateTag={createTag} />
     </div>
   )
 }
@@ -604,11 +608,15 @@ function TodoRow({ todo, tags, onToggle, onDelete, onUpdate, onCreateTag, dragga
   }
 
   const handleCheck = () => {
+    // 이미 완료된 항목을 누르면 체크 해제
+    if (todo.done) { onToggle(todo.id); return }
     if (checking) return
     setChecking(true)
-    // 체크 애니메이션을 보여준 뒤 목록에서 제거
-    setTimeout(() => onToggle(todo.id), 350)
+    // 체크 애니메이션을 보여준 뒤 반영 — 오늘 항목은 체크된 채로 목록에 남는다
+    setTimeout(() => { setChecking(false); onToggle(todo.id) }, 350)
   }
+
+  const checked = todo.done || checking
 
   return (
     <div
@@ -636,14 +644,14 @@ function TodoRow({ todo, tags, onToggle, onDelete, onUpdate, onCreateTag, dragga
       )}
       <button
         onClick={handleCheck}
-        aria-label="완료"
+        aria-label={todo.done ? '완료 취소' : '완료'}
         className={`w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-          checking
-            ? 'bg-emerald-400 border-emerald-400 check-pop'
+          checked
+            ? `bg-emerald-400 border-emerald-400${checking ? ' check-pop' : ''}`
             : 'border-gray-200 hover:border-emerald-400'
         }`}
       >
-        {checking && (
+        {checked && (
           <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
           </svg>
@@ -651,7 +659,7 @@ function TodoRow({ todo, tags, onToggle, onDelete, onUpdate, onCreateTag, dragga
       </button>
 
       <button onClick={() => setEditing(true)} className="flex-1 min-w-0 text-left">
-        <p className={`text-sm transition-colors ${checking ? 'text-gray-300 line-through' : 'text-gray-700'}`}>
+        <p className={`text-sm transition-colors ${checked ? 'text-gray-300 line-through' : 'text-gray-700'}`}>
           {todo.name}
         </p>
       </button>
