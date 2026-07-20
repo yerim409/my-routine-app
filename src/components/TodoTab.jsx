@@ -427,18 +427,29 @@ export default function TodoTab({ userId, onSummary }) {
             </DndContext>
           )}
 
-          {/* 예정 */}
+          {/* 예정 — 날짜 우선 정렬이라 드래그는 같은 날짜 안에서만 순서가 유지된다 */}
           {upcoming.length > 0 && (
             <div className="mt-5">
               <p className="text-[11px] font-semibold text-gray-300 tracking-wider mb-0.5">예정</p>
-              {upcoming.map(todo => (
-                <TodoRow
-                  key={todo.id}
-                  todo={todo}
-                  dateLabel={formatUpcomingLabel(todo.when, todayKey)}
-                  {...rowProps}
-                />
-              ))}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={({ active, over }) => reorderTodos(active.id, over?.id, upcoming)}
+              >
+                <SortableContext items={upcoming.map(todo => todo.id)} strategy={verticalListSortingStrategy}>
+                  <div>
+                    {upcoming.map(todo => (
+                      <TodoRow
+                        key={todo.id}
+                        todo={todo}
+                        draggable
+                        dateLabel={formatUpcomingLabel(todo.when, todayKey)}
+                        {...rowProps}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             </div>
           )}
 
